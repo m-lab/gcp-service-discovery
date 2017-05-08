@@ -1,6 +1,6 @@
-// mlab_service_discovery contacts the AppEngine Admin API to finds all
+// gcp_service_discovery contacts the AppEngine Admin API to finds all
 // AppEngine Flexible Environments VMs in a RUNNING and SERVING state.
-// mlab_service_discovery generates a JSON targets file based on the VM
+// gcp_service_discovery generates a JSON targets file based on the VM
 // metadata suitable for input to prometheus.
 //
 // TODO:
