@@ -33,7 +33,7 @@ var (
 	defaultScopes = []string{appengine.CloudPlatformScope, appengine.AppengineAdminScope}
 )
 
-// AEFlexSource bundles runtime several variables together.
+// AEFlexSource caches information collected from the App Engine Admin API.
 type AEFlexSource struct {
 	// The GCP project id.
 	project string
@@ -132,7 +132,7 @@ func (client *AEFlexSource) getLabels(service *appengine.Service, version *appen
 }
 
 // Save writes the content of the the collected set of targets.
-func (client *AEFlexSource) Save(name string) error {
+func (client *AEFlexSource) Save(filename string) error {
 	// Convert to JSON.
 	data, err := json.MarshalIndent(client.targets, "", "    ")
 	if err != nil {
@@ -142,9 +142,9 @@ func (client *AEFlexSource) Save(name string) error {
 	}
 
 	// Save targets to output file.
-	err = ioutil.WriteFile(name, data, 0644)
+	err = ioutil.WriteFile(filename, data, 0644)
 	if err != nil {
-		log.Printf("Failed to write %s: %s", name, err)
+		log.Printf("Failed to write %s: %s", filename, err)
 		return err
 	}
 	return nil
@@ -170,7 +170,8 @@ func (client *AEFlexSource) Collect() error {
 		}
 		return nil
 	})
-	// TODO(soltesz): collect and report metrics about number of API calls.
+	// TODO(p2, soltesz): collect and report metrics about number of API calls.
+	// TODO(p2, soltesz): consider using goroutines to speed up collection.
 	return err
 }
 
