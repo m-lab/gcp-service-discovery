@@ -1,42 +1,46 @@
-// gcp_service_discovery contacts the AppEngine Admin API to finds all
-// AppEngine Flexible Environments VMs in a RUNNING and SERVING state.
-// gcp_service_discovery generates a JSON targets file based on the VM
-// metadata suitable for input to prometheus.
+// gcp_service_discovery uses various GCP APIs to discover prometheus targets.
+// Using metadata collected during discovery, gcp_service_discovery generates a
+// JSON prometheus service discovery targets file, suitable for prometheus.
+//
+// gcp_service_discovery supports the following sources:
+//  * App Engine Admin API - find AE Flex instances.
 //
 // TODO:
-//   * run continuously as a daemon.
-//   * bundled process in a docker container and deploy with the prometheus pod.
-//   * generalize to read from generic web sources.
+//  * Generic HTTP(s) sources - download a pre-generated service discovery file.
+//  * Container Engine API - find clusters with annotated services or federation scraping.
 
 package main
 
 import (
-	"encoding/json"
 	"flag"
-	"io/ioutil"
 	"log"
 	"time"
 
-	"github.com/kr/pretty"
 	"github.com/m-lab/gcp-service-discovery/aeflex"
 )
 
 var (
-	project  = flag.String("project", "", "GCP project name.")
-	filename = flag.String("output", "targets.json", "Write targets configuration to given filename.")
-	refresh  = flag.Duration("refresh", time.Minute, "Number of seconds between refreshing.")
+	project   = flag.String("project", "", "GCP project name.")
+	aefTarget = flag.String("aef-target", "aef-target.json", "Write targets configuration to given filename.")
+	refresh   = flag.Duration("refresh", time.Minute, "Number of seconds between refreshing.")
 )
 
 // TargetSource defines the interface for collecting targets from various
 // services. New services should implement this interface.
 type TargetSource interface {
+	// Collect retrieves all targets from a source.
 	Collect() error
-	Targets() []interface{}
+
+	// Save writes the targets to the named file.
+	Save(name string) error
 }
 
 func main() {
 	flag.Parse()
 	var start time.Time
+
+	// TODO(dev): create and loop over an array of TargetSource instances for
+	// aeflex, gke, and web.
 
 	// Only sleep as long as we need to, before starting a new iteration.
 	for ; ; time.Sleep(*refresh - time.Since(start)) {
@@ -57,20 +61,13 @@ func main() {
 			continue
 		}
 
-		// Convert to JSON.
-		data, err := json.MarshalIndent(client.Targets(), "", "    ")
+		// Write the targets to a file.
+		err = client.Save(*aefTarget)
 		if err != nil {
-			log.Printf("Failed to Marshal JSON: %s", err)
-			log.Printf("Pretty data: %s", pretty.Sprint(client.Targets))
+			log.Printf("Failed to save to %s: %s", *aefTarget, err)
 			continue
 		}
 
-		// Save targets to output file.
-		err = ioutil.WriteFile(*filename, data, 0644)
-		if err != nil {
-			log.Printf("Failed to write %s: %s", *filename, err)
-			continue
-		}
 		log.Printf("Finished round after: %s", time.Since(start))
 	}
 	return
