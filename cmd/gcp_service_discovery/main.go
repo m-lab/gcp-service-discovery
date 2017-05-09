@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/kr/pretty"
-	"github.com/stephen-soltesz/gcp-service-discovery/aeflex"
+	"github.com/m-lab/gcp-service-discovery/aeflex"
 )
 
 var (
@@ -31,7 +31,7 @@ var (
 // services. New services should implement this interface.
 type TargetSource interface {
 	Collect() error
-	Save(output string) error
+	Targets() []interface{}
 }
 
 func main() {
@@ -44,21 +44,21 @@ func main() {
 		log.Printf("Starting a new round at: %s", start)
 
 		// Allocate a new authenticated client for App Engine API.
-		client, err := aeflex.NewClient(*project)
+		client, err := aeflex.NewAEFlexSource(*project)
 		if err != nil {
 			log.Printf("Failed to get authenticated client: %s", err)
 			continue
 		}
 
 		// Collect AE Flex targets and labels.
-		err = aeflex.ListVms(client)
+		err = client.Collect()
 		if err != nil {
-			log.Printf("Failed to list VMs: %s", err)
+			log.Printf("Failed to Collect targets: %s", err)
 			continue
 		}
 
 		// Convert to JSON.
-		data, err := json.MarshalIndent(client.Targets, "", "    ")
+		data, err := json.MarshalIndent(client.Targets(), "", "    ")
 		if err != nil {
 			log.Printf("Failed to Marshal JSON: %s", err)
 			log.Printf("Pretty data: %s", pretty.Sprint(client.Targets))
@@ -71,6 +71,7 @@ func main() {
 			log.Printf("Failed to write %s: %s", *filename, err)
 			continue
 		}
+		log.Printf("Finished round after: %s", time.Since(start))
 	}
 	return
 }
