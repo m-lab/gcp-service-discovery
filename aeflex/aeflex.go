@@ -33,11 +33,11 @@ type Discovery struct {
 
 	client  *http.Client
 	apis    *appengine.APIService
-	Targets []interface{}
+	targets []interface{}
 }
 
 // newClient returns a new discovery object with an authenticated AppEngine client.
-func NewClient(project string) (*Discovery, error) {
+func NewAEFlexSource(project string) (*Discovery, error) {
 	d := &Discovery{
 		project: project,
 	}
@@ -56,7 +56,7 @@ func NewClient(project string) (*Discovery, error) {
 	}
 
 	// Allocate space for the list of targets.
-	d.Targets = make([]interface{}, 0)
+	d.targets = make([]interface{}, 0)
 	return d, nil
 }
 
@@ -119,10 +119,14 @@ func getLabels(project string, service *appengine.Service, version *appengine.Ve
 	return values
 }
 
+func (client *Discovery) Targets() []interface{} {
+	return client.targets
+}
+
 // listVms walks through every AppEngine service, looks at every serving
 // version. listVms returns a list of every running instance in a form suitable
 // for export to a prometheus service discovery file.
-func ListVms(client *Discovery) error {
+func (client *Discovery) Collect() error {
 	s := client.apis.Apps.Services.List(client.project)
 	// List all services.
 	err := s.Pages(nil, func(listSvc *appengine.ListServicesResponse) error {
@@ -139,6 +143,7 @@ func ListVms(client *Discovery) error {
 		}
 		return nil
 	})
+	// TODO(soltesz): collect and report metrics about number of API calls.
 	return err
 }
 
@@ -177,7 +182,7 @@ func (client *Discovery) handleInstances(listInst *appengine.ListInstancesRespon
 		if len(version.Network.ForwardedPorts) == 0 {
 			continue
 		}
-		client.Targets = append(client.Targets, getLabels(client.project, service, version, instance))
+		client.targets = append(client.targets, getLabels(client.project, service, version, instance))
 	}
 	return nil
 }
