@@ -24,10 +24,11 @@ import (
 )
 
 var (
-	project   = flag.String("project", "", "GCP project name.")
-	aefTarget = flag.String("aef-target", "", "Write targets configuration to given filename.")
-	gkeTarget = flag.String("gke-target", "", "Write targets configuration to given filename.")
-	refresh   = flag.Duration("refresh", time.Minute, "Number of seconds between refreshing.")
+	project    = flag.String("project", "", "GCP project name.")
+	aefTarget  = flag.String("aef-target", "", "Write targets configuration to given filename.")
+	gkeTarget  = flag.String("gke-target", "", "Write targets configuration to given filename.")
+	httpTarget = flag.String("http-target", "", "Write targets configuration to given filename.")
+	refresh    = flag.Duration("refresh", time.Minute, "Number of seconds between refreshing.")
 )
 
 func main() {
@@ -43,6 +44,10 @@ func main() {
 		// Allocate a new authenticated client for GCE & GKE API.
 		factories = append(factories, gke.NewGKESource(*project, *gkeTarget))
 	}
+	if *httpTarget != "" {
+		fmt.Fprintf(os.Stderr, "Error: http targets are not yet supported.\n")
+		os.Exit(1)
+	}
 
 	if *project == "" {
 		flag.Usage()
@@ -57,9 +62,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: Specify at least one output target file.\n")
 		os.Exit(1)
 	}
-
-	// TODO(dev): create and loop over an array of TargetSource instances for
-	// aeflex, gke, and web.
 
 	// Only sleep as long as we need to, before starting a new iteration.
 	for ; ; time.Sleep(*refresh - time.Since(start)) {
