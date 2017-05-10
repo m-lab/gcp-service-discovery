@@ -15,6 +15,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 
+	"github.com/m-lab/gcp-service-discovery/targetsource"
 	appengine "google.golang.org/api/appengine/v1"
 )
 
@@ -38,6 +39,9 @@ type AEFlexSource struct {
 	// The GCP project id.
 	project string
 
+	// The output filename.
+	filename string
+
 	// client caches an http client authenticated for access to GCP APIs.
 	client *http.Client
 
@@ -49,9 +53,19 @@ type AEFlexSource struct {
 }
 
 // NewAEFlexSource returns a new discovery object with an authenticated AppEngine client.
-func NewAEFlexSource(project string) (*AEFlexSource, error) {
+func NewAEFlexSource(project, filename string) *AEFlexSource {
 	d := &AEFlexSource{
-		project: project,
+		project:  project,
+		filename: filename,
+	}
+	return d
+}
+
+// Client creates a new initialized AEFlexSource.
+func (client *AEFlexSource) Client() (targetsource.TargetSource, error) {
+	d := &AEFlexSource{
+		project:  client.project,
+		filename: client.filename,
 	}
 
 	var err error
@@ -132,7 +146,7 @@ func (client *AEFlexSource) getLabels(service *appengine.Service, version *appen
 }
 
 // Save writes the content of the the collected set of targets.
-func (client *AEFlexSource) Save(filename string) error {
+func (client *AEFlexSource) Save() error {
 	// Convert to JSON.
 	data, err := json.MarshalIndent(client.targets, "", "    ")
 	if err != nil {
@@ -142,9 +156,9 @@ func (client *AEFlexSource) Save(filename string) error {
 	}
 
 	// Save targets to output file.
-	err = ioutil.WriteFile(filename, data, 0644)
+	err = ioutil.WriteFile(client.filename, data, 0644)
 	if err != nil {
-		log.Printf("Failed to write %s: %s", filename, err)
+		log.Printf("Failed to write %s: %s", client.filename, err)
 		return err
 	}
 	return nil
@@ -154,6 +168,9 @@ func (client *AEFlexSource) Save(filename string) error {
 // every serving version. Collect saves every AppEngine Flexible Environments
 // VMs that is in a RUNNING and SERVING state.
 func (client *AEFlexSource) Collect() error {
+	// Allocate space for the list of targets.
+	client.targets = make([]interface{}, 0)
+
 	s := client.apis.Apps.Services.List(client.project)
 	// List all services.
 	err := s.Pages(nil, func(listSvc *appengine.ListServicesResponse) error {
