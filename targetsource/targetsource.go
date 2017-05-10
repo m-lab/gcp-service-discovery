@@ -10,7 +10,8 @@ type TargetSource interface {
 	Save() error
 }
 
-// Generator defines the interface for creating new TargetSource instances.
-type Generator interface {
+// Factory defines the interface for creating new TargetSource instances.
+type Factory interface {
+	// Client creates a new TargetSource ready for collection.
 	Client() (TargetSource, error)
 }

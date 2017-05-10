@@ -33,15 +33,15 @@ var (
 func main() {
 	flag.Parse()
 	var start time.Time
-	generators := []targetsource.Generator{}
+	factories := []targetsource.Factory{}
 
 	if *aefTarget != "" {
 		// Allocate a new authenticated client for App Engine API.
-		generators = append(generators, aeflex.NewAEFlexSource(*project, *aefTarget))
+		factories = append(factories, aeflex.NewAEFlexSource(*project, *aefTarget))
 	}
 	if *gkeTarget != "" {
 		// Allocate a new authenticated client for GCE & GKE API.
-		generators = append(generators, gke.NewGKESource(*project, *gkeTarget))
+		factories = append(factories, gke.NewGKESource(*project, *gkeTarget))
 	}
 
 	if *project == "" {
@@ -51,7 +51,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if len(generators) == 0 {
+	if len(factories) == 0 {
 		flag.Usage()
 		fmt.Fprintf(os.Stderr, "\n")
 		fmt.Fprintf(os.Stderr, "Error: Specify at least one output target file.\n")
@@ -66,11 +66,11 @@ func main() {
 		start = time.Now()
 		log.Printf("Starting a new round at: %s", start)
 
-		for i := range generators {
+		for i := range factories {
 			// Allocate a new authenticated client.
-			target, err := generators[i].Client()
+			target, err := factories[i].Client()
 			if err != nil {
-				log.Printf("Failed to get client from generator: %s", err)
+				log.Printf("Failed to get client from factory: %s", err)
 				continue
 			}
 
