@@ -63,31 +63,27 @@ func NewGKESource(project, filename string) *GKESource {
 }
 
 func (gke *GKESource) Client() (targetsource.TargetSource, error) {
-	g := &GKESource{
-		project:  gke.project,
-		filename: gke.filename,
-	}
 	var err error
 
 	// Create a new authenticated HTTP client.
-	g.client, err = google.DefaultClient(oauth2.NoContext, gkeScopes...)
+	gke.client, err = google.DefaultClient(oauth2.NoContext, gkeScopes...)
 	if err != nil {
 		return nil, fmt.Errorf("Error setting up Compute client: %s", err)
 	}
 
 	// Create a new Compute service instance.
-	g.computeService, err = compute.New(g.client)
+	gke.computeService, err = compute.New(gke.client)
 	if err != nil {
 		return nil, fmt.Errorf("Error setting up Compute client: %s", err)
 	}
 
 	// Create a new Container Engine service object.
-	g.containerService, err = container.New(g.client)
+	gke.containerService, err = container.New(gke.client)
 	if err != nil {
 		return nil, fmt.Errorf("Error setting up Container Engine client: %s", err)
 	}
 
-	return g, nil
+	return gke, nil
 }
 
 // Saves collected targets to the given filename.
