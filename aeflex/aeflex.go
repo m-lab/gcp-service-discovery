@@ -86,8 +86,6 @@ func (f *Factory) Create() (discovery.Source, error) {
 		return nil, fmt.Errorf("Error setting up AppEngine client: %s", err)
 	}
 
-	// Allocate space for the list of targets.
-	source.targets = make([]interface{}, 0)
 	return source, nil
 }
 
