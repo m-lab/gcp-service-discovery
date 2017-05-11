@@ -58,7 +58,8 @@ type Source struct {
 	targets []interface{}
 }
 
-// NewSource returns a new discovery object with an authenticated AppEngine client.
+// NewSourceFactory returns a new Factory object that can create new App Engine
+// Flex Sources.
 func NewSourceFactory(project, filename string) *Factory {
 	return &Factory{
 		project:  project,
@@ -66,7 +67,8 @@ func NewSourceFactory(project, filename string) *Factory {
 	}
 }
 
-// Client creates a new initialized Source.
+// Create returns a discovery.Source initialized with authenticated clients for
+// App Engine Admin API, ready for Collection.
 func (f *Factory) Create() (discovery.Source, error) {
 	source := &Source{
 		factory: *f,

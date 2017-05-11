@@ -59,7 +59,7 @@ type Source struct {
 	targets []interface{}
 }
 
-// NewSource returns a new Source object with an authenticated clients for Compute & Container APIs.
+// NewSourceFactory returns a new Factory object that can create new GKE Sources.
 func NewSourceFactory(project, filename string) *Factory {
 	return &Factory{
 		project:  project,
@@ -67,6 +67,8 @@ func NewSourceFactory(project, filename string) *Factory {
 	}
 }
 
+// Create returns a discovery.Source initialized with authenticated clients for
+// Compute & Container APIs, ready for Collection.
 func (f *Factory) Create() (discovery.Source, error) {
 	source := &Source{
 		factory: *f,
