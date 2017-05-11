@@ -4,68 +4,90 @@
 //
 // gcp_service_discovery supports the following sources:
 //  * App Engine Admin API - find AE Flex instances.
+//  * Container Engine API - find clusters annotated for federation scraping.
 //
 // TODO:
 //  * Generic HTTP(s) sources - download a pre-generated service discovery file.
-//  * Container Engine API - find clusters with annotated services or federation scraping.
-
 package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/m-lab/gcp-service-discovery/aeflex"
+	"github.com/m-lab/gcp-service-discovery/discovery"
+	"github.com/m-lab/gcp-service-discovery/gke"
 )
 
 var (
-	project   = flag.String("project", "", "GCP project name.")
-	aefTarget = flag.String("aef-target", "aef-target.json", "Write targets configuration to given filename.")
-	refresh   = flag.Duration("refresh", time.Minute, "Number of seconds between refreshing.")
+	project    = flag.String("project", "", "GCP project name.")
+	aefTarget  = flag.String("aef-target", "", "Write targets configuration to given filename.")
+	gkeTarget  = flag.String("gke-target", "", "Write targets configuration to given filename.")
+	httpTarget = flag.String("http-target", "", "Write targets configuration to given filename.")
+	refresh    = flag.Duration("refresh", time.Minute, "Number of seconds between refreshing.")
 )
-
-// TargetSource defines the interface for collecting targets from various
-// services. New services should implement this interface.
-type TargetSource interface {
-	// Collect retrieves all targets from a source.
-	Collect() error
-
-	// Save writes the targets to the named file.
-	Save(name string) error
-}
 
 func main() {
 	flag.Parse()
 	var start time.Time
+	factories := []discovery.Factory{}
 
-	// TODO(dev): create and loop over an array of TargetSource instances for
-	// aeflex, gke, and web.
+	if *aefTarget != "" {
+		// Allocate a new authenticated client for App Engine API.
+		factories = append(factories, aeflex.NewSourceFactory(*project, *aefTarget))
+	}
+	if *gkeTarget != "" {
+		// Allocate a new authenticated client for GCE & GKE API.
+		factories = append(factories, gke.NewSourceFactory(*project, *gkeTarget))
+	}
+	if *httpTarget != "" {
+		fmt.Fprintf(os.Stderr, "Error: http targets are not yet supported.\n")
+		os.Exit(1)
+	}
+
+	if *project == "" {
+		flag.Usage()
+		fmt.Fprintf(os.Stderr, "\n")
+		fmt.Fprintf(os.Stderr, "Error: Specify a GCP project.\n")
+		os.Exit(1)
+	}
+
+	if len(factories) == 0 {
+		flag.Usage()
+		fmt.Fprintf(os.Stderr, "\n")
+		fmt.Fprintf(os.Stderr, "Error: Specify at least one output target file.\n")
+		os.Exit(1)
+	}
 
 	// Only sleep as long as we need to, before starting a new iteration.
 	for ; ; time.Sleep(*refresh - time.Since(start)) {
 		start = time.Now()
 		log.Printf("Starting a new round at: %s", start)
 
-		// Allocate a new authenticated client for App Engine API.
-		client, err := aeflex.NewAEFlexSource(*project)
-		if err != nil {
-			log.Printf("Failed to get authenticated client: %s", err)
-			continue
-		}
+		for i := range factories {
+			// Allocate a new authenticated client.
+			target, err := factories[i].Create()
+			if err != nil {
+				log.Printf("Failed to get client from factory: %s", err)
+				continue
+			}
 
-		// Collect AE Flex targets and labels.
-		err = client.Collect()
-		if err != nil {
-			log.Printf("Failed to Collect targets: %s", err)
-			continue
-		}
+			// Collect targets and labels.
+			err = target.Collect()
+			if err != nil {
+				log.Printf("Failed to Collect targets: %s", err)
+				continue
+			}
 
-		// Write the targets to a file.
-		err = client.Save(*aefTarget)
-		if err != nil {
-			log.Printf("Failed to save to %s: %s", *aefTarget, err)
-			continue
+			// Write the targets to a file.
+			err = target.Save()
+			if err != nil {
+				log.Printf("Failed to save: %s", err)
+				continue
+			}
 		}
 
 		log.Printf("Finished round after: %s", time.Since(start))
