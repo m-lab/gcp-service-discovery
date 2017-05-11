@@ -62,28 +62,23 @@ func NewAEFlexSource(project, filename string) *AEFlexSource {
 }
 
 // Client creates a new initialized AEFlexSource.
-func (client *AEFlexSource) Client() (targetsource.TargetSource, error) {
-	d := &AEFlexSource{
-		project:  client.project,
-		filename: client.filename,
-	}
-
+func (aef *AEFlexSource) Client() (targetsource.TargetSource, error) {
 	var err error
 	// Create a new authenticated HTTP client.
-	d.client, err = google.DefaultClient(oauth2.NoContext, defaultScopes...)
+	aef.client, err = google.DefaultClient(oauth2.NoContext, defaultScopes...)
 	if err != nil {
 		return nil, fmt.Errorf("Error setting up AppEngine client: %s", err)
 	}
 
 	// Create a new AppEngine service instance.
-	d.apis, err = appengine.New(d.client)
+	aef.apis, err = appengine.New(aef.client)
 	if err != nil {
 		return nil, fmt.Errorf("Error setting up AppEngine client: %s", err)
 	}
 
 	// Allocate space for the list of targets.
-	d.targets = make([]interface{}, 0)
-	return d, nil
+	aef.targets = make([]interface{}, 0)
+	return aef, nil
 }
 
 // getLabels creates a target configuration for a prometheus service discovery
@@ -105,9 +100,9 @@ func (client *AEFlexSource) Client() (targetsource.TargetSource, error) {
 //           "104.196.220.184:9090"
 //       ]
 //   }
-func (client *AEFlexSource) getLabels(service *appengine.Service, version *appengine.Version, instance *appengine.Instance) map[string]interface{} {
+func (aef *AEFlexSource) getLabels(service *appengine.Service, version *appengine.Version, instance *appengine.Instance) map[string]interface{} {
 	labels := map[string]string{
-		aefLabelProject:      client.project,
+		aefLabelProject:      aef.project,
 		aefLabelService:      service.Id,
 		aefLabelVersion:      version.Id,
 		aefLabelInstance:     instance.Id,
@@ -146,19 +141,19 @@ func (client *AEFlexSource) getLabels(service *appengine.Service, version *appen
 }
 
 // Save writes the content of the the collected set of targets.
-func (client *AEFlexSource) Save() error {
+func (aef *AEFlexSource) Save() error {
 	// Convert to JSON.
-	data, err := json.MarshalIndent(client.targets, "", "    ")
+	data, err := json.MarshalIndent(aef.targets, "", "    ")
 	if err != nil {
 		log.Printf("Failed to Marshal JSON: %s", err)
-		log.Printf("Pretty data: %s", pretty.Sprint(client.targets))
+		log.Printf("Pretty data: %s", pretty.Sprint(aef.targets))
 		return err
 	}
 
 	// Save targets to output file.
-	err = ioutil.WriteFile(client.filename, data, 0644)
+	err = ioutil.WriteFile(aef.filename, data, 0644)
 	if err != nil {
-		log.Printf("Failed to write %s: %s", client.filename, err)
+		log.Printf("Failed to write %s: %s", aef.filename, err)
 		return err
 	}
 	return nil
@@ -167,19 +162,19 @@ func (client *AEFlexSource) Save() error {
 // Collect contacts the App Engine Admin API to to check every service, and
 // every serving version. Collect saves every AppEngine Flexible Environments
 // VMs that is in a RUNNING and SERVING state.
-func (client *AEFlexSource) Collect() error {
+func (aef *AEFlexSource) Collect() error {
 	// Allocate space for the list of targets.
-	client.targets = make([]interface{}, 0)
+	aef.targets = make([]interface{}, 0)
 
-	s := client.apis.Apps.Services.List(client.project)
+	s := aef.apis.Apps.Services.List(aef.project)
 	// List all services.
 	err := s.Pages(nil, func(listSvc *appengine.ListServicesResponse) error {
 		for _, service := range listSvc.Services {
 			// List all versions of each service.
-			v := client.apis.Apps.Services.Versions.List(client.project, service.Id)
+			v := aef.apis.Apps.Services.Versions.List(aef.project, service.Id)
 			err := v.Pages(nil, func(listVer *appengine.ListVersionsResponse) error {
 				// pretty.Print(service)
-				return client.handleVersions(listVer, service)
+				return aef.handleVersions(listVer, service)
 			})
 			if err != nil {
 				return err
@@ -193,7 +188,7 @@ func (client *AEFlexSource) Collect() error {
 }
 
 // handles each version returned by an AppEngine Versions.List.
-func (client *AEFlexSource) handleVersions(listVer *appengine.ListVersionsResponse, service *appengine.Service) error {
+func (aef *AEFlexSource) handleVersions(listVer *appengine.ListVersionsResponse, service *appengine.Service) error {
 	for _, version := range listVer.Versions {
 
 		if version.ServingStatus != "SERVING" {
@@ -201,10 +196,10 @@ func (client *AEFlexSource) handleVersions(listVer *appengine.ListVersionsRespon
 		}
 		// pretty.Print(version)
 		// List instances associated with each service version.
-		l := client.apis.Apps.Services.Versions.Instances.List(
-			client.project, service.Id, version.Id)
+		l := aef.apis.Apps.Services.Versions.Instances.List(
+			aef.project, service.Id, version.Id)
 		err := l.Pages(nil, func(listInst *appengine.ListInstancesResponse) error {
-			return client.handleInstances(listInst, service, version)
+			return aef.handleInstances(listInst, service, version)
 		})
 		if err != nil {
 			return err
@@ -214,7 +209,7 @@ func (client *AEFlexSource) handleVersions(listVer *appengine.ListVersionsRespon
 }
 
 // handles each version returned by an AppEngine Versions.List.
-func (client *AEFlexSource) handleInstances(listInst *appengine.ListInstancesResponse, service *appengine.Service, version *appengine.Version) error {
+func (aef *AEFlexSource) handleInstances(listInst *appengine.ListInstancesResponse, service *appengine.Service, version *appengine.Version) error {
 	for _, instance := range listInst.Instances {
 		// pretty.Print(instance)
 		if instance.VmStatus != "RUNNING" {
@@ -227,9 +222,9 @@ func (client *AEFlexSource) handleInstances(listInst *appengine.ListInstancesRes
 		if len(version.Network.ForwardedPorts) == 0 {
 			continue
 		}
-		client.targets = append(
-			client.targets,
-			client.getLabels(service, version, instance))
+		aef.targets = append(
+			aef.targets,
+			aef.getLabels(service, version, instance))
 	}
 	return nil
 }
