@@ -43,21 +43,6 @@ type Factory struct {
 	filename string
 }
 
-// Source caches information collected from the App Engine Admin API during target discovery.
-type Source struct {
-	// factory is a copy of the original instance that created this source.
-	factory Factory
-
-	// client caches an http client authenticated for access to GCP APIs.
-	client *http.Client
-
-	// apis is the entry point to all AEFlex services.
-	apis *appengine.APIService
-
-	// targets collects found targets.
-	targets []interface{}
-}
-
 // NewSourceFactory returns a new Factory object that can create new App Engine
 // Flex Sources.
 func NewSourceFactory(project, filename string) *Factory {
@@ -87,6 +72,68 @@ func (f *Factory) Create() (discovery.Source, error) {
 	}
 
 	return source, nil
+}
+
+// Source caches information collected from the App Engine Admin API during target discovery.
+type Source struct {
+	// factory is a copy of the original instance that created this source.
+	factory Factory
+
+	// client caches an http client authenticated for access to GCP APIs.
+	client *http.Client
+
+	// apis is the entry point to all AEFlex services.
+	apis *appengine.APIService
+
+	// targets collects found targets.
+	targets []interface{}
+}
+
+// Save writes the content of the the collected set of targets.
+func (source *Source) Save() error {
+	// Convert to JSON.
+	data, err := json.MarshalIndent(source.targets, "", "    ")
+	if err != nil {
+		log.Printf("Failed to Marshal JSON: %s", err)
+		log.Printf("Pretty data: %s", pretty.Sprint(source.targets))
+		return err
+	}
+
+	// Save targets to output file.
+	err = ioutil.WriteFile(source.factory.filename, data, 0644)
+	if err != nil {
+		log.Printf("Failed to write %s: %s", source.factory.filename, err)
+		return err
+	}
+	return nil
+}
+
+// Collect contacts the App Engine Admin API to to check every service, and
+// every serving version. Collect saves every AppEngine Flexible Environments
+// VMs that is in a RUNNING and SERVING state.
+func (source *Source) Collect() error {
+	// Allocate space for the list of targets.
+	source.targets = make([]interface{}, 0)
+
+	s := source.apis.Apps.Services.List(source.factory.project)
+	// List all services.
+	err := s.Pages(nil, func(listSvc *appengine.ListServicesResponse) error {
+		for _, service := range listSvc.Services {
+			// List all versions of each service.
+			v := source.apis.Apps.Services.Versions.List(source.factory.project, service.Id)
+			err := v.Pages(nil, func(listVer *appengine.ListVersionsResponse) error {
+				// pretty.Print(service)
+				return source.handleVersions(listVer, service)
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	// TODO(p2, soltesz): collect and report metrics about number of API calls.
+	// TODO(p2, soltesz): consider using goroutines to speed up collection.
+	return err
 }
 
 // getLabels creates a target configuration for a prometheus service discovery
@@ -146,53 +193,6 @@ func (source *Source) getLabels(service *appengine.Service, version *appengine.V
 		"targets": targets,
 	}
 	return values
-}
-
-// Save writes the content of the the collected set of targets.
-func (source *Source) Save() error {
-	// Convert to JSON.
-	data, err := json.MarshalIndent(source.targets, "", "    ")
-	if err != nil {
-		log.Printf("Failed to Marshal JSON: %s", err)
-		log.Printf("Pretty data: %s", pretty.Sprint(source.targets))
-		return err
-	}
-
-	// Save targets to output file.
-	err = ioutil.WriteFile(source.factory.filename, data, 0644)
-	if err != nil {
-		log.Printf("Failed to write %s: %s", source.factory.filename, err)
-		return err
-	}
-	return nil
-}
-
-// Collect contacts the App Engine Admin API to to check every service, and
-// every serving version. Collect saves every AppEngine Flexible Environments
-// VMs that is in a RUNNING and SERVING state.
-func (source *Source) Collect() error {
-	// Allocate space for the list of targets.
-	source.targets = make([]interface{}, 0)
-
-	s := source.apis.Apps.Services.List(source.factory.project)
-	// List all services.
-	err := s.Pages(nil, func(listSvc *appengine.ListServicesResponse) error {
-		for _, service := range listSvc.Services {
-			// List all versions of each service.
-			v := source.apis.Apps.Services.Versions.List(source.factory.project, service.Id)
-			err := v.Pages(nil, func(listVer *appengine.ListVersionsResponse) error {
-				// pretty.Print(service)
-				return source.handleVersions(listVer, service)
-			})
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	// TODO(p2, soltesz): collect and report metrics about number of API calls.
-	// TODO(p2, soltesz): consider using goroutines to speed up collection.
-	return err
 }
 
 // handles each version returned by an AppEngine Versions.List.

@@ -41,24 +41,6 @@ type Factory struct {
 	filename string
 }
 
-// Source caches information collected from the GCE, GKE, and K8S APIs during target discovery.
-type Source struct {
-	// factory is a copy of the original instance that created this source.
-	factory Factory
-
-	// client caches an http client authenticated for access to GCP APIs.
-	client *http.Client
-
-	// computeService is the entry point to all GCE services.
-	computeService *compute.Service
-
-	// containerService is the entry point to all GKE services.
-	containerService *container.Service
-
-	// targets collects found targets.
-	targets []interface{}
-}
-
 // NewSourceFactory returns a new Factory object that can create new GKE Sources.
 func NewSourceFactory(project, filename string) *Factory {
 	return &Factory{
@@ -94,6 +76,24 @@ func (f *Factory) Create() (discovery.Source, error) {
 	}
 
 	return source, nil
+}
+
+// Source caches information collected from the GCE, GKE, and K8S APIs during target discovery.
+type Source struct {
+	// factory is a copy of the original instance that created this source.
+	factory Factory
+
+	// client caches an http client authenticated for access to GCP APIs.
+	client *http.Client
+
+	// computeService is the entry point to all GCE services.
+	computeService *compute.Service
+
+	// containerService is the entry point to all GKE services.
+	containerService *container.Service
+
+	// targets collects found targets.
+	targets []interface{}
 }
 
 // Saves collected targets to the given filename.

@@ -1,3 +1,4 @@
+// discovery defines generic interfaces for service discovery.
 package discovery
 
 // Source defines the interface for collecting targets from various

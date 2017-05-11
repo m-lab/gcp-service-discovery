@@ -8,7 +8,6 @@
 //
 // TODO:
 //  * Generic HTTP(s) sources - download a pre-generated service discovery file.
-
 package main
 
 import (
