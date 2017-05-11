@@ -23,7 +23,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd/api"
 	// Uncomment the following line to load the gcp plugin (only required to authenticate against GKE clusters).
 	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	"github.com/m-lab/gcp-service-discovery/targetsource"
+	"github.com/m-lab/gcp-service-discovery/discovery"
 )
 
 var (
@@ -32,13 +32,18 @@ var (
 	gkeScopes = []string{compute.CloudPlatformScope}
 )
 
-// GKESource caches information collected from the GCE, GKE, and K8S APIs.
-type GKESource struct {
+type Factory struct {
 	// The GCP project id.
 	project string
 
 	// The output filename.
 	filename string
+}
+
+// Source caches information collected from the GCE, GKE, and K8S APIs.
+type Source struct {
+	// factory is a copy of the original instance that created this source.
+	factory Factory
 
 	// client caches an http client authenticated for access to GCP APIs.
 	client *http.Client
@@ -53,53 +58,55 @@ type GKESource struct {
 	targets []interface{}
 }
 
-// NewGKESource returns a new GKESource object with an authenticated clients for Compute & Container APIs.
-func NewGKESource(project, filename string) *GKESource {
-	gke := &GKESource{
+// NewSource returns a new Source object with an authenticated clients for Compute & Container APIs.
+func NewSourceFactory(project, filename string) *Factory {
+	return &Factory{
 		project:  project,
 		filename: filename,
 	}
-	return gke
 }
 
-func (gke *GKESource) Client() (targetsource.TargetSource, error) {
+func (f *Factory) Create() (discovery.Source, error) {
+	source := &Source{
+		factory: *f,
+	}
 	var err error
 
 	// Create a new authenticated HTTP client.
-	gke.client, err = google.DefaultClient(oauth2.NoContext, gkeScopes...)
+	source.client, err = google.DefaultClient(oauth2.NoContext, gkeScopes...)
 	if err != nil {
 		return nil, fmt.Errorf("Error setting up Compute client: %s", err)
 	}
 
 	// Create a new Compute service instance.
-	gke.computeService, err = compute.New(gke.client)
+	source.computeService, err = compute.New(source.client)
 	if err != nil {
 		return nil, fmt.Errorf("Error setting up Compute client: %s", err)
 	}
 
 	// Create a new Container Engine service object.
-	gke.containerService, err = container.New(gke.client)
+	source.containerService, err = container.New(source.client)
 	if err != nil {
 		return nil, fmt.Errorf("Error setting up Container Engine client: %s", err)
 	}
 
-	return gke, nil
+	return source, nil
 }
 
 // Saves collected targets to the given filename.
-func (gke *GKESource) Save() error {
+func (source *Source) Save() error {
 	// Convert the targets to JSON.
-	data, err := json.MarshalIndent(gke.targets, "", "    ")
+	data, err := json.MarshalIndent(source.targets, "", "    ")
 	if err != nil {
 		log.Printf("Failed to Marshal JSON: %s", err)
-		log.Printf("Pretty data: %s", pretty.Sprint(gke.targets))
+		log.Printf("Pretty data: %s", pretty.Sprint(source.targets))
 		return err
 	}
 
 	// Save targets to output file.
-	err = ioutil.WriteFile(gke.filename, data, 0644)
+	err = ioutil.WriteFile(source.factory.filename, data, 0644)
 	if err != nil {
-		log.Printf("Failed to write %s: %s", gke.filename, err)
+		log.Printf("Failed to write %s: %s", source.factory.filename, err)
 		return err
 	}
 	return nil
@@ -111,18 +118,18 @@ func (gke *GKESource) Save() error {
 //
 // Collect returns every gke cluster with a k8s service annotation that equals:
 //    gke-prometheus-federation/scrape: true
-func (gke *GKESource) Collect() error {
+func (source *Source) Collect() error {
 	// Allocate space for the list of targets.
-	gke.targets = make([]interface{}, 0)
+	source.targets = make([]interface{}, 0)
 
 	// Get all zones in a project.
-	zoneListCall := gke.computeService.Zones.List(gke.project)
+	zoneListCall := source.computeService.Zones.List(source.factory.project)
 	err := zoneListCall.Pages(nil, func(zones *compute.ZoneList) error {
 		for _, zone := range zones.Items {
 
 			// Get all clusters in a zone.
-			clusterList, err := gke.containerService.Projects.Zones.Clusters.List(
-				gke.project, zone.Name).Do()
+			clusterList, err := source.containerService.Projects.Zones.Clusters.List(
+				source.factory.project, zone.Name).Do()
 			if err != nil {
 				return err
 			}
@@ -133,7 +140,7 @@ func (gke *GKESource) Collect() error {
 				if err != nil {
 					return err
 				}
-				gke.targets = append(gke.targets, targets...)
+				source.targets = append(source.targets, targets...)
 			}
 		}
 		return nil

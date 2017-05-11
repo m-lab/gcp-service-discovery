@@ -19,8 +19,8 @@ import (
 	"time"
 
 	"github.com/m-lab/gcp-service-discovery/aeflex"
+	"github.com/m-lab/gcp-service-discovery/discovery"
 	"github.com/m-lab/gcp-service-discovery/gke"
-	"github.com/m-lab/gcp-service-discovery/targetsource"
 )
 
 var (
@@ -34,15 +34,15 @@ var (
 func main() {
 	flag.Parse()
 	var start time.Time
-	factories := []targetsource.Factory{}
+	factories := []discovery.Factory{}
 
 	if *aefTarget != "" {
 		// Allocate a new authenticated client for App Engine API.
-		factories = append(factories, aeflex.NewAEFlexSource(*project, *aefTarget))
+		factories = append(factories, aeflex.NewSourceFactory(*project, *aefTarget))
 	}
 	if *gkeTarget != "" {
 		// Allocate a new authenticated client for GCE & GKE API.
-		factories = append(factories, gke.NewGKESource(*project, *gkeTarget))
+		factories = append(factories, gke.NewSourceFactory(*project, *gkeTarget))
 	}
 	if *httpTarget != "" {
 		fmt.Fprintf(os.Stderr, "Error: http targets are not yet supported.\n")
@@ -70,7 +70,7 @@ func main() {
 
 		for i := range factories {
 			// Allocate a new authenticated client.
-			target, err := factories[i].Client()
+			target, err := factories[i].Create()
 			if err != nil {
 				log.Printf("Failed to get client from factory: %s", err)
 				continue
