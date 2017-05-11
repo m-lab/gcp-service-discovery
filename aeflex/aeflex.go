@@ -34,7 +34,7 @@ var (
 	defaultScopes = []string{appengine.CloudPlatformScope, appengine.AppengineAdminScope}
 )
 
-// Source caches information collected from the App Engine Admin API.
+// Factory stores information needed to create new Source instances.
 type Factory struct {
 	// The GCP project id.
 	project string
@@ -43,6 +43,7 @@ type Factory struct {
 	filename string
 }
 
+// Source caches information collected from the App Engine Admin API during target discovery.
 type Source struct {
 	// factory is a copy of the original instance that created this source.
 	factory Factory

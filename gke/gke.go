@@ -32,6 +32,7 @@ var (
 	gkeScopes = []string{compute.CloudPlatformScope}
 )
 
+// Factory stores information needed to create new Source instances.
 type Factory struct {
 	// The GCP project id.
 	project string
@@ -40,7 +41,7 @@ type Factory struct {
 	filename string
 }
 
-// Source caches information collected from the GCE, GKE, and K8S APIs.
+// Source caches information collected from the GCE, GKE, and K8S APIs during target discovery.
 type Source struct {
 	// factory is a copy of the original instance that created this source.
 	factory Factory
