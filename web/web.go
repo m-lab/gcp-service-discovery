@@ -1,3 +1,4 @@
+// web implements service discovery for generic HTTP or HTTPS URLs.
 package web
 
 import (
