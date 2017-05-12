@@ -11,8 +11,8 @@
 package main
 
 import (
-	"flag"
 	"fmt"
+	flag "github.com/spf13/pflag"
 	"log"
 	"os"
 	"time"
@@ -20,21 +20,41 @@ import (
 	"github.com/m-lab/gcp-service-discovery/aeflex"
 	"github.com/m-lab/gcp-service-discovery/discovery"
 	"github.com/m-lab/gcp-service-discovery/gke"
+	"github.com/m-lab/gcp-service-discovery/web"
 )
 
 var (
-	project    = flag.String("project", "", "GCP project name.")
-	aefTarget  = flag.String("aef-target", "", "Write targets configuration to given filename.")
-	gkeTarget  = flag.String("gke-target", "", "Write targets configuration to given filename.")
-	httpTarget = flag.String("http-target", "", "Write targets configuration to given filename.")
-	refresh    = flag.Duration("refresh", time.Minute, "Number of seconds between refreshing.")
+	httpSources = []string{}
+	httpTargets = []string{}
+	project     = flag.String("project", "", "GCP project name.")
+	aefTarget   = flag.String("aef-target", "", "Write targets configuration to given filename.")
+	gkeTarget   = flag.String("gke-target", "", "Write targets configuration to given filename.")
+	refresh     = flag.Duration("refresh", time.Minute, "Number of seconds between refreshing.")
 )
+
+func init() {
+	flag.StringArrayVar(&httpSources, "http-source", nil, "Read configuration from HTTP(S) source.")
+	flag.StringArrayVar(&httpTargets, "http-target", nil, "Write HTTP(S) source to the given filename.")
+}
 
 func main() {
 	flag.Parse()
 	var start time.Time
 	factories := []discovery.Factory{}
 
+	if len(httpSources) != len(httpTargets) {
+		fmt.Fprintf(os.Stderr, "\n")
+		fmt.Fprintf(os.Stderr, "Error: http sources and targets must match.\n")
+		os.Exit(1)
+	}
+	if (*aefTarget != "" && *project == "") || (*gkeTarget != "" && *project == "") {
+		flag.Usage()
+		fmt.Fprintf(os.Stderr, "\n")
+		fmt.Fprintf(os.Stderr, "Error: Specify a GCP project.\n")
+		os.Exit(1)
+	}
+
+	// Allocate every relevant source factories.
 	if *aefTarget != "" {
 		// Allocate a new authenticated client for App Engine API.
 		factories = append(factories, aeflex.NewSourceFactory(*project, *aefTarget))
@@ -43,18 +63,12 @@ func main() {
 		// Allocate a new authenticated client for GCE & GKE API.
 		factories = append(factories, gke.NewSourceFactory(*project, *gkeTarget))
 	}
-	if *httpTarget != "" {
-		fmt.Fprintf(os.Stderr, "Error: http targets are not yet supported.\n")
-		os.Exit(1)
+	for i := range httpSources {
+		// Allocate a new client for downloading an HTTP(S) source.
+		factories = append(factories, web.NewSourceFactory(httpSources[i], httpTargets[i]))
 	}
 
-	if *project == "" {
-		flag.Usage()
-		fmt.Fprintf(os.Stderr, "\n")
-		fmt.Fprintf(os.Stderr, "Error: Specify a GCP project.\n")
-		os.Exit(1)
-	}
-
+	// Verify that there is at least one source factory allocated before continuing.
 	if len(factories) == 0 {
 		flag.Usage()
 		fmt.Fprintf(os.Stderr, "\n")
