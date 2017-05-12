@@ -12,10 +12,11 @@ package main
 
 import (
 	"fmt"
-	flag "github.com/spf13/pflag"
 	"log"
 	"os"
 	"time"
+
+	flag "github.com/spf13/pflag"
 
 	"github.com/m-lab/gcp-service-discovery/aeflex"
 	"github.com/m-lab/gcp-service-discovery/discovery"
@@ -54,6 +55,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	// TODO(p2, soltesz): add timeout parameter to aeflex and gke NewSourceFactory.
+
 	// Allocate every relevant source factories.
 	if *aefTarget != "" {
 		// Allocate a new authenticated client for App Engine API.
@@ -65,7 +68,7 @@ func main() {
 	}
 	for i := range httpSources {
 		// Allocate a new client for downloading an HTTP(S) source.
-		factories = append(factories, web.NewSourceFactory(httpSources[i], httpTargets[i]))
+		factories = append(factories, web.NewSourceFactory(httpSources[i], httpTargets[i], *refresh))
 	}
 
 	// Verify that there is at least one source factory allocated before continuing.

@@ -1,10 +1,11 @@
 package web
 
 import (
-	"github.com/m-lab/gcp-service-discovery/discovery"
 	"io/ioutil"
 	"net/http"
 	"time"
+
+	"github.com/m-lab/gcp-service-discovery/discovery"
 )
 
 // Factory stores information needed to create new Source instances.
@@ -14,13 +15,17 @@ type Factory struct {
 
 	// The output filename.
 	dstFile string
+
+	// timeout limits the total HTTP request time.
+	timeout time.Duration
 }
 
 // NewSourceFactory returns a new Factory object that can create new Web Sources.
-func NewSourceFactory(source, target string) *Factory {
+func NewSourceFactory(source, target string, timeout time.Duration) *Factory {
 	return &Factory{
 		srcUrl:  source,
 		dstFile: target,
+		timeout: timeout,
 	}
 }
 
@@ -28,7 +33,7 @@ func NewSourceFactory(source, target string) *Factory {
 // Collection.
 func (f *Factory) Create() (discovery.Source, error) {
 	client := http.Client{
-		Timeout: time.Minute,
+		Timeout: f.timeout,
 	}
 	source := &Source{
 		factory: *f,
@@ -38,12 +43,16 @@ func (f *Factory) Create() (discovery.Source, error) {
 	return source, nil
 }
 
-// Source caches information collected from the GCE, GKE, and K8S APIs during
-// target discovery.
+// Source caches information collected from the web Source after collection.
 type Source struct {
+	// factory is a copy of the original instance that created this source.
 	factory Factory
-	client  http.Client
-	data    []byte
+
+	// client caches an http client for a web download.
+	client http.Client
+
+	// data is the result of the web download.
+	data []byte
 }
 
 // Saves collected targets to the given filename.
@@ -58,12 +67,18 @@ func (source *Source) Save() error {
 
 // Collect uses http.Client library to download a file from an HTTP(S) url.
 func (source *Source) Collect() error {
+	// TODO(p3, soltesz): right now these files are pretty small, but it's
+	// unnecessary to download them again if they have not changed. Add an HTTP
+	// header check to optionally skip download.
+
+	// Download the srcUrl.
 	resp, err := source.client.Get(source.factory.srcUrl)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
+	// Read and store the contents.
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return err
