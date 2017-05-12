@@ -40,11 +40,10 @@ func (f *Factory) Create() (discovery.Source, error) {
 		factory: *f,
 		client:  client,
 	}
-
 	return source, nil
 }
 
-// Source caches information collected from the web Source after collection.
+// Source caches data collected from the web.
 type Source struct {
 	// factory is a copy of the original instance that created this source.
 	factory Factory
