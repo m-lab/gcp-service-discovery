@@ -3,9 +3,11 @@ package web
 
 import (
 	"io/ioutil"
+	"log"
 	"net/http"
 	"time"
 
+	"github.com/dchest/safefile"
 	"github.com/m-lab/gcp-service-discovery/discovery"
 )
 
@@ -58,7 +60,8 @@ type Source struct {
 // Saves collected targets to the given filename.
 func (source *Source) Save() error {
 	// Save targets to output file.
-	err := ioutil.WriteFile(source.factory.dstFile, source.data, 0644)
+	log.Printf("Saving: %s", source.factory.dstFile)
+	err := safefile.WriteFile(source.factory.dstFile, source.data, 0644)
 	if err != nil {
 		return err
 	}

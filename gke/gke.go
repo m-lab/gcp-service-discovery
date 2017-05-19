@@ -6,10 +6,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 
+	"github.com/dchest/safefile"
 	"github.com/kr/pretty"
 
 	"golang.org/x/oauth2"
@@ -107,7 +107,8 @@ func (source *Source) Save() error {
 	}
 
 	// Save targets to output file.
-	err = ioutil.WriteFile(source.factory.filename, data, 0644)
+	log.Printf("Saving: %s", source.factory.filename)
+	err = safefile.WriteFile(source.factory.filename, data, 0644)
 	if err != nil {
 		log.Printf("Failed to write %s: %s", source.factory.filename, err)
 		return err
