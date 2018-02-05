@@ -157,12 +157,18 @@ func (source *Source) Collect() error {
 //       ]
 //   }
 func (source *Source) getLabels(service *appengine.Service, version *appengine.Version, instance *appengine.Instance) map[string]interface{} {
+	var instances int64
+	if version.AutomaticScaling != nil {
+		instances = version.AutomaticScaling.MaxTotalInstances
+	} else if version.ManualScaling != nil {
+		instances = version.ManualScaling.Instances
+	}
 	labels := map[string]string{
 		aefLabelProject:      source.factory.project,
 		aefLabelService:      service.Id,
 		aefLabelVersion:      version.Id,
 		aefLabelInstance:     instance.Id,
-		aefMaxTotalInstances: fmt.Sprintf("%d", version.AutomaticScaling.MaxTotalInstances),
+		aefMaxTotalInstances: fmt.Sprintf("%d", instances),
 		aefVmDebugEnabled:    fmt.Sprintf("%t", instance.VmDebugEnabled),
 	}
 	if strings.HasSuffix(version.Network.ForwardedPorts[0], "/udp") {
