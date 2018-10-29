@@ -1,4 +1,4 @@
-// aeflex implements service discovery for GCE VMs running in App Engine Flex.
+// Package aeflex implements service discovery for GCE VMs running in App Engine Flex.
 package aeflex
 
 import (
@@ -17,6 +17,8 @@ import (
 
 	"github.com/m-lab/gcp-service-discovery/discovery"
 	appengine "google.golang.org/api/appengine/v1"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -41,6 +43,55 @@ type Factory struct {
 
 	// The output filename.
 	filename string
+}
+
+var (
+	// ServiceCount is the current number of AEFlex services.
+	//
+	// Provides metrics:
+	//   gcp_aeflex_services
+	// Example usage:
+	//   ServiceCount.Set(count)
+	ServiceCount = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "gcp_aeflex_services",
+			Help: "Number of active AEFlex services.",
+		},
+	)
+
+	// VersionCount is the current number of available versions.
+	//
+	// Provides metrics:
+	//   gcp_aeflex_versions{service="etl-batch-parser"}
+	// Example usage:
+	//   VersionCount.WithLabelValues("etl-batch-parser").Set(count)
+	VersionCount = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "gcp_aeflex_versions",
+			Help: "Total number of versions.",
+		},
+		[]string{"service"},
+	)
+
+	// InstanceCount is the current number of serving instances.
+	//
+	// Provides metrics:
+	//   gcp_aeflex_instances{service="etl-batch-parser", serving="true"}
+	// Example usage:
+	//   InstanceCount.WithLabelValues("etl-batch-parser", "true").Set(count)
+	InstanceCount = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "gcp_aeflex_instances",
+			Help: "Total number of running serving instances.",
+		},
+		[]string{"service", "active"},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(ServiceCount)
+	prometheus.MustRegister(VersionCount)
+	prometheus.MustRegister(InstanceCount)
 }
 
 // NewSourceFactory returns a new Factory object that can create new App Engine
@@ -118,20 +169,31 @@ func (source *Source) Collect() error {
 
 	s := source.apis.Apps.Services.List(source.factory.project)
 	// List all services.
+	services := 0
 	err := s.Pages(nil, func(listSvc *appengine.ListServicesResponse) error {
+		services += len(listSvc.Services)
 		for _, service := range listSvc.Services {
 			// List all versions of each service.
 			v := source.apis.Apps.Services.Versions.List(source.factory.project, service.Id)
+			versions := 0
+			active := 0
+			inactive := 0
 			err := v.Pages(nil, func(listVer *appengine.ListVersionsResponse) error {
-				// pretty.Print(service)
-				return source.handleVersions(listVer, service)
+				versions += len(listVer.Versions)
+				err := source.handleVersions(listVer, service, &active, &inactive)
+				return err
 			})
+			log.Println(service.Name, "versions:", versions, "active:", active, "inactive:", inactive)
+			VersionCount.WithLabelValues(service.Id).Set(float64(versions))
+			InstanceCount.WithLabelValues(service.Id, "true").Set(float64(active))
+			InstanceCount.WithLabelValues(service.Id, "false").Set(float64(inactive))
 			if err != nil {
 				return err
 			}
 		}
 		return nil
 	})
+	ServiceCount.Set(float64(services))
 	// TODO(p2, soltesz): collect and report metrics about number of API calls.
 	// TODO(p2, soltesz): consider using goroutines to speed up collection.
 	return err
@@ -156,7 +218,9 @@ func (source *Source) Collect() error {
 //           "104.196.220.184:9090"
 //       ]
 //   }
-func (source *Source) getLabels(service *appengine.Service, version *appengine.Version, instance *appengine.Instance) map[string]interface{} {
+func (source *Source) getLabels(
+	service *appengine.Service, version *appengine.Version,
+	instance *appengine.Instance) map[string]interface{} {
 	var instances int64
 	if version.AutomaticScaling != nil {
 		instances = version.AutomaticScaling.MaxTotalInstances
@@ -203,19 +267,32 @@ func (source *Source) getLabels(service *appengine.Service, version *appengine.V
 }
 
 // handles each version returned by an AppEngine Versions.List.
-func (source *Source) handleVersions(listVer *appengine.ListVersionsResponse, service *appengine.Service) error {
-	for _, version := range listVer.Versions {
+func (source *Source) handleVersions(
+	listVer *appengine.ListVersionsResponse, service *appengine.Service,
+	active *int, inactive *int) error {
 
+	for _, version := range listVer.Versions {
+		// We can only monitor instances that are running.
 		if version.ServingStatus != "SERVING" {
 			continue
 		}
-		// pretty.Print(version)
+		// This version has "SERVING" instances. Can it receive traffic?
+		// We don't want to monitor versions that will receive no traffic.
+		// This can occur during incomplete deployments.
+		_, shouldMonitor := service.Split.Allocations[version.Id]
+
 		// List instances associated with each service version.
-		l := source.apis.Apps.Services.Versions.Instances.List(
-			source.factory.project, service.Id, version.Id)
-		err := l.Pages(nil, func(listInst *appengine.ListInstancesResponse) error {
-			return source.handleInstances(listInst, service, version)
-		})
+		err := source.apis.Apps.Services.Versions.Instances.List(
+			source.factory.project, service.Id, version.Id).Pages(
+			nil, func(listInst *appengine.ListInstancesResponse) error {
+				found, err := source.handleInstances(listInst, service, version, shouldMonitor)
+				if shouldMonitor {
+					*active += found
+				} else {
+					*inactive += found
+				}
+				return err
+			})
 		if err != nil {
 			return err
 		}
@@ -223,10 +300,21 @@ func (source *Source) handleVersions(listVer *appengine.ListVersionsResponse, se
 	return nil
 }
 
-// handles each version returned by an AppEngine Versions.List.
-func (source *Source) handleInstances(listInst *appengine.ListInstancesResponse, service *appengine.Service, version *appengine.Version) error {
+// handleInstances checks each instance returned by AppEngine Versions.List and
+// returns the total number of VMs found that *could* be monitored. However,
+// when shouldMonitor is false, the Source targets list is not updated. This
+// is helpful for situations where we want to count running instances without
+// monitoring them.
+func (source *Source) handleInstances(
+	listInst *appengine.ListInstancesResponse, service *appengine.Service,
+	version *appengine.Version, shouldMonitor bool) (int, error) {
+	found := 0
 	for _, instance := range listInst.Instances {
-		// pretty.Print(instance)
+		// Only flex instances have a VmIp.
+		if instance.VmIp == "" {
+			// Ignore standard instances.
+			continue
+		}
 		if instance.VmStatus != "RUNNING" {
 			continue
 		}
@@ -237,9 +325,12 @@ func (source *Source) handleInstances(listInst *appengine.ListInstancesResponse,
 		if len(version.Network.ForwardedPorts) == 0 {
 			continue
 		}
-		source.targets = append(
-			source.targets,
-			source.getLabels(service, version, instance))
+		found++
+		if shouldMonitor {
+			source.targets = append(
+				source.targets,
+				source.getLabels(service, version, instance))
+		}
 	}
-	return nil
+	return found, nil
 }

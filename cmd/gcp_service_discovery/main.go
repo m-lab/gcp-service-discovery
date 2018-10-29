@@ -13,6 +13,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
@@ -22,6 +23,8 @@ import (
 	"github.com/m-lab/gcp-service-discovery/discovery"
 	"github.com/m-lab/gcp-service-discovery/gke"
 	"github.com/m-lab/gcp-service-discovery/web"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -78,6 +81,13 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: Specify at least one output target file.\n")
 		os.Exit(1)
 	}
+
+	go func() {
+		http.Handle("/metrics", promhttp.Handler())
+		// Port allocated from:
+		// https://github.com/prometheus/prometheus/wiki/Default-port-allocations
+		log.Fatal(http.ListenAndServe(":9373", nil))
+	}()
 
 	// Only sleep as long as we need to, before starting a new iteration.
 	for ; ; time.Sleep(*refresh - time.Since(start)) {
