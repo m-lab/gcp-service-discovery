@@ -1,0 +1,12 @@
+language: go
+
+go:
+- '1.11'
+
+# Place the repo at GOPATH/src/${go_import_path} to support PRs from forks.
+go_import_path: github.com/m-lab/gcp-service-discovery
+
+
+script:
+# Verify that docker image builds.
+- docker build -t gcp-service-discovery .
