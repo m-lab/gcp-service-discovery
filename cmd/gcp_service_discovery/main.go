@@ -84,6 +84,8 @@ func main() {
 
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
+		// Port allocated from:
+		// https://github.com/prometheus/prometheus/wiki/Default-port-allocations
 		log.Fatal(http.ListenAndServe(":9373", nil))
 	}()
 
