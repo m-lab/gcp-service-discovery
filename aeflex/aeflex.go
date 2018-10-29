@@ -78,7 +78,7 @@ var (
 	// Provides metrics:
 	//   gcp_aeflex_instances{service="etl-batch-parser", serving="true"}
 	// Example usage:
-	//   VersionCount.WithLabelValues("etl-batch-parser", "true").Set(count)
+	//   InstanceCount.WithLabelValues("etl-batch-parser", "true").Set(count)
 	InstanceCount = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "gcp_aeflex_instances",
