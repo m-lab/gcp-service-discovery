@@ -305,7 +305,11 @@ func (source *Source) handleVersions(
 	return nil
 }
 
-// handles each instance returned by an AppEngine Versions.List.
+// handleInstances checks each instance returned by AppEngine Versions.List and
+// returns the total number of VMs found that *could* be monitored. However,
+// when shouldMonitor is false, the Source targets list is not updated. This
+// is helpful for situations where we want to count running instances without
+// monitoring them.
 func (source *Source) handleInstances(
 	listInst *appengine.ListInstancesResponse, service *appengine.Service,
 	version *appengine.Version, shouldMonitor bool) (int, error) {
