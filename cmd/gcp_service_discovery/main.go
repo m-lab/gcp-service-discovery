@@ -84,7 +84,7 @@ func main() {
 
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
-		log.Fatal(http.ListenAndServe(":9099", nil))
+		log.Fatal(http.ListenAndServe(":9373", nil))
 	}()
 
 	// Only sleep as long as we need to, before starting a new iteration.
