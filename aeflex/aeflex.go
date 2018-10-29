@@ -160,11 +160,6 @@ func (source *Source) Save() error {
 	return nil
 }
 
-func jprint(v interface{}) {
-	data, _ := json.MarshalIndent(v, "", "    ")
-	fmt.Println(string(data))
-}
-
 // Collect contacts the App Engine Admin API to to check every service, and
 // every serving version. Collect saves every AppEngine Flexible Environments
 // VMs that is in a RUNNING and SERVING state.
