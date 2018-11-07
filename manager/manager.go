@@ -39,8 +39,8 @@ func (m *Manager) Count() int {
 	return len(m.services)
 }
 
-// Run collects all registered services every interval period. Run returns once
-// ctx is canceled.
+// Run executes discovery for all registered services every interval period. Run
+// returns once ctx is canceled.
 func (m *Manager) Run(ctx context.Context, interval time.Duration) {
 	tick := time.Tick(interval)
 	for {
