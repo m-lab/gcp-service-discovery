@@ -67,8 +67,6 @@ func TestManager_Run(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 
 			m := NewManager(tt.timeout)
 			m.Register(tt.service, tt.output)
@@ -77,12 +75,8 @@ func TestManager_Run(t *testing.T) {
 				return
 			}
 
-			go func() {
-				time.Sleep(time.Second)
-				// Cancel context ~1s after running.
-				cancel()
-			}()
-
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second/2)
+			defer cancel()
 			m.Run(ctx, time.Second/2)
 		})
 	}
