@@ -13,19 +13,21 @@ import (
 	"github.com/m-lab/go/rtx"
 )
 
-// Manager foobar.
+// Manager executes service discovery then serializes and writes targets to disk.
 type Manager struct {
 	services []discovery.Service
 	output   []string
 	Timeout  time.Duration
 }
 
-// NewManager generates
+// NewManager creates a new manager instance. When calling Run, each registered
+// service should take no longer than Timeout.
 func NewManager(timeout time.Duration) *Manager {
 	return &Manager{Timeout: timeout}
 }
 
-// Register accepts a new thing for output.
+// Register accepts a new service. Future calls to Run will discover targets
+// from this service and write them to the file named by output.
 func (m *Manager) Register(s discovery.Service, output string) {
 	m.services = append(m.services, s)
 	m.output = append(m.output, output)
@@ -37,15 +39,16 @@ func (m *Manager) Count() int {
 	return len(m.services)
 }
 
-// Run collects all services every interval period.
+// Run collects all registered services every interval period. Run returns once
+// ctx is canceled.
 func (m *Manager) Run(ctx context.Context, interval time.Duration) {
 	tick := time.Tick(interval)
 	for {
 		// TODO: add waitgroup and run discovery in parallel.
 		for i := range m.services {
 
-			ctx2, cancel := context.WithTimeout(context.Background(), m.Timeout)
-			configs, err := m.services[i].Discover(ctx2)
+			disCtx, cancel := context.WithTimeout(ctx, m.Timeout)
+			configs, err := m.services[i].Discover(disCtx)
 			cancel()
 			if err != nil {
 				log.Printf("Error: %T: %s", m.services[i], err)
