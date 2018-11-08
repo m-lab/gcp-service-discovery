@@ -66,6 +66,11 @@ func TestSource_Discover(t *testing.T) {
 			readAllFail: true,
 			wantErr:     true,
 		},
+		{
+			name:    "failure-url-is-invalid",
+			badURL:  ":/this-is-an-invalid-url",
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -88,7 +93,7 @@ func TestSource_Discover(t *testing.T) {
 			} else {
 				readAll = ioutil.ReadAll
 			}
-			srv := NewService(url, 5*time.Second)
+			srv := NewService(url)
 			got, err := srv.Discover(context.Background())
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Source.Discover() error = %v, wantErr %v", err, tt.wantErr)

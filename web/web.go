@@ -7,39 +7,45 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"time"
 
 	"github.com/m-lab/gcp-service-discovery/discovery"
 )
 
+// Enable unit testing of readAll.
+var readAll = ioutil.ReadAll
+
 // Service defines the data collected from the web.
 type Service struct {
-	// The configuration source, as an http or https URL.
+	// srcURL is an HTTP(S) URL of the configuration source.
 	srcURL string
 
-	// client caches an http client for a web download.
+	// client is used for each web download.
 	client http.Client
 
-	// cache is temporary storage to determine whether to update.
-	cache string
+	// TODO: add cache to determine whether to update.
 }
 
-// NewService creates a new web service that requests the given srcURL.
-// Requests must always complete within the given timeout.
-func NewService(srcURL string, timeout time.Duration) *Service {
+// NewService creates a new web service to download the given srcURL. The srcURL
+// should be an HTTP(S) URL to a file whose contents are a JSON formatted
+// Prometheus static_config.
+func NewService(srcURL string) *Service {
 	s := &Service{
 		srcURL: srcURL,
-		client: http.Client{Timeout: timeout},
 	}
 	return s
 }
 
-var readAll = ioutil.ReadAll
-
-// Discover retrieves the targets configuration.
+// Discover downloads the source URL provided at service creation time.
+//  registeredthe targets configuration.
 func (srv *Service) Discover(ctx context.Context) ([]discovery.StaticConfig, error) {
 	// TODO: add support for srv.cache using client.Head()
-	resp, err := srv.client.Get(srv.srcURL)
+	req, err := http.NewRequest(http.MethodGet, srv.srcURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req = req.WithContext(ctx)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
