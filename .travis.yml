@@ -12,7 +12,7 @@ before_install:
 
 script:
 # Run query "unit tests".
-- for module in manager ; do
+- for module in discovery ; do
     go test -v -short -covermode=count -coverprofile=${module}.cov github.com/m-lab/gcp-service-discovery/${module} ;
   done
 
