@@ -6,7 +6,19 @@ go:
 # Place the repo at GOPATH/src/${go_import_path} to support PRs from forks.
 go_import_path: github.com/m-lab/gcp-service-discovery
 
+before_install:
+- go get github.com/mattn/goveralls
+- go get github.com/wadey/gocovmerge
 
 script:
-# Verify that docker image builds.
+# Run query "unit tests".
+- for module in discovery ; do
+    go test -v -short -covermode=count -coverprofile=${module}.cov github.com/m-lab/gcp-service-discovery/${module} ;
+  done
+
+# Coveralls
+- $HOME/gopath/bin/gocovmerge *.cov > merge.cov
+- $HOME/gopath/bin/goveralls -coverprofile=merge.cov -service=travis-ci
+
+# Verify that the docker image builds.
 - docker build -t gcp-service-discovery .
