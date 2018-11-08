@@ -1,6 +1,6 @@
 // Package manager manages and runs service discovery and saves target
 // configuration files.
-package manager
+package discovery
 
 import (
 	"context"
@@ -9,13 +9,12 @@ import (
 	"time"
 
 	"github.com/dchest/safefile"
-	"github.com/m-lab/gcp-service-discovery/discovery"
 	"github.com/m-lab/go/rtx"
 )
 
 // Manager executes service discovery then serializes and writes targets to disk.
 type Manager struct {
-	services []discovery.Service
+	services []Service
 	output   []string
 	Timeout  time.Duration
 }
@@ -28,7 +27,7 @@ func NewManager(timeout time.Duration) *Manager {
 
 // Register accepts a new service. Future calls to Run will discover targets
 // from this service and write them to the file named by output.
-func (m *Manager) Register(s discovery.Service, output string) {
+func (m *Manager) Register(s Service, output string) {
 	m.services = append(m.services, s)
 	m.output = append(m.output, output)
 	return
@@ -71,7 +70,7 @@ func (m *Manager) Run(ctx context.Context, interval time.Duration) {
 }
 
 // writeConfigToFile serializes and writes the given configs as JSON to the output filename.
-func writeConfigToFile(configs []discovery.StaticConfig, filename string) error {
+func writeConfigToFile(configs []StaticConfig, filename string) error {
 	// Convert to JSON.
 	data, err := json.MarshalIndent(configs, "", "    ")
 	rtx.Must(err, "Failed to marshal StaticConfig")

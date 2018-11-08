@@ -1,41 +1,39 @@
-// Package manager manages and runs service discovery and saves target
+// Package discovery manages and runs service discovery and saves target
 // configuration files.
-package manager
+package discovery
 
 import (
 	"context"
 	"fmt"
 	"testing"
 	"time"
-
-	"github.com/m-lab/gcp-service-discovery/discovery"
 )
 
 type fakeLiteral struct{}
 
-func (f *fakeLiteral) Discover(ctx context.Context) ([]discovery.StaticConfig, error) {
-	return []discovery.StaticConfig{
+func (f *fakeLiteral) Discover(ctx context.Context) ([]StaticConfig, error) {
+	return []StaticConfig{
 		{Targets: []string{"output"}, Labels: map[string]string{"key": "value"}},
 	}, nil
 }
 
 type fakeTimeout struct{}
 
-func (f *fakeTimeout) Discover(ctx context.Context) ([]discovery.StaticConfig, error) {
+func (f *fakeTimeout) Discover(ctx context.Context) ([]StaticConfig, error) {
 	<-ctx.Done()
-	return []discovery.StaticConfig{}, nil
+	return []StaticConfig{}, nil
 }
 
 type fakeFailure struct{}
 
-func (f *fakeFailure) Discover(ctx context.Context) ([]discovery.StaticConfig, error) {
+func (f *fakeFailure) Discover(ctx context.Context) ([]StaticConfig, error) {
 	return nil, fmt.Errorf("Failed to discover")
 }
 
 func TestManager_Run(t *testing.T) {
 	tests := []struct {
 		name     string
-		service  discovery.Service
+		service  Service
 		output   string
 		timeout  time.Duration
 		ctx      context.Context
