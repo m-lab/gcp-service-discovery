@@ -11,6 +11,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -44,6 +45,7 @@ func init() {
 func main() {
 	flag.Parse()
 	var start time.Time
+	manager := discovery.NewManager(*refresh)
 	factories := []discovery.Factory{}
 
 	if len(httpSources) != len(httpTargets) {
@@ -71,11 +73,11 @@ func main() {
 	}
 	for i := range httpSources {
 		// Allocate a new client for downloading an HTTP(S) source.
-		factories = append(factories, web.NewSourceFactory(httpSources[i], httpTargets[i], *refresh))
+		manager.Register(web.NewService(httpSources[i]), httpTargets[i])
 	}
 
 	// Verify that there is at least one source factory allocated before continuing.
-	if len(factories) == 0 {
+	if len(factories) == 0 && manager.Count() == 0 {
 		flag.Usage()
 		fmt.Fprintf(os.Stderr, "\n")
 		fmt.Fprintf(os.Stderr, "Error: Specify at least one output target file.\n")
@@ -87,6 +89,11 @@ func main() {
 		// Port allocated from:
 		// https://github.com/prometheus/prometheus/wiki/Default-port-allocations
 		log.Fatal(http.ListenAndServe(":9373", nil))
+	}()
+
+	go func() {
+		// Run discovery forever.
+		manager.Run(context.Background(), *refresh)
 	}()
 
 	// Only sleep as long as we need to, before starting a new iteration.
@@ -119,5 +126,4 @@ func main() {
 
 		log.Printf("Finished round after: %s", time.Since(start))
 	}
-	return
 }
