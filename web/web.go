@@ -1,91 +1,70 @@
-// web implements service discovery for generic HTTP or HTTPS URLs.
+// Package web implements service discovery for generic HTTP or HTTPS URLs.
 package web
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
-	"time"
 
-	"github.com/dchest/safefile"
 	"github.com/m-lab/gcp-service-discovery/discovery"
 )
 
-// Factory stores information needed to create new Source instances.
-type Factory struct {
-	// The configuration source, as an http or https URL.
-	srcUrl string
+// Enable unit testing of readAll.
+var readAll = ioutil.ReadAll
 
-	// The output filename.
-	dstFile string
+// Service defines the data collected from the web.
+type Service struct {
+	// srcURL is an HTTP(S) URL of the configuration source.
+	srcURL string
 
-	// timeout limits the total HTTP request time.
-	timeout time.Duration
-}
-
-// NewSourceFactory returns a new Factory object that can create new Web Sources.
-func NewSourceFactory(source, target string, timeout time.Duration) *Factory {
-	return &Factory{
-		srcUrl:  source,
-		dstFile: target,
-		timeout: timeout,
-	}
-}
-
-// Create returns a discovery.Source initialized with an http.Client ready for
-// Collection.
-func (f *Factory) Create() (discovery.Source, error) {
-	client := http.Client{
-		Timeout: f.timeout,
-	}
-	source := &Source{
-		factory: *f,
-		client:  client,
-	}
-	return source, nil
-}
-
-// Source caches data collected from the web.
-type Source struct {
-	// factory is a copy of the original instance that created this source.
-	factory Factory
-
-	// client caches an http client for a web download.
+	// client is used for each web download.
 	client http.Client
 
-	// data is the result of the web download.
-	data []byte
+	// TODO: add cache to determine whether to update.
 }
 
-// Saves collected targets to the given filename.
-func (source *Source) Save() error {
-	// Save targets to output file.
-	log.Printf("Saving: %s", source.factory.dstFile)
-	err := safefile.WriteFile(source.factory.dstFile, source.data, 0644)
-	if err != nil {
-		return err
+// NewService creates a new web service to download the given srcURL. The srcURL
+// should be an HTTP(S) URL to a file whose contents are a JSON formatted
+// Prometheus static_config.
+func NewService(srcURL string) *Service {
+	return &Service{
+		srcURL: srcURL,
 	}
-	return nil
 }
 
-// Collect uses http.Client library to download a file from an HTTP(S) url.
-func (source *Source) Collect() error {
-	// TODO(p3, soltesz): right now these files are pretty small, but it's
-	// unnecessary to download them again if they have not changed. Add an HTTP
-	// header check to optionally skip download.
-
-	// Download the srcUrl.
-	resp, err := source.client.Get(source.factory.srcUrl)
+// Discover downloads the source URL provided at service creation time.
+//  registeredthe targets configuration.
+func (srv *Service) Discover(ctx context.Context) ([]discovery.StaticConfig, error) {
+	// TODO: add support for srv.cache using client.Head()
+	req, err := http.NewRequest(http.MethodGet, srv.srcURL, nil)
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	req = req.WithContext(ctx)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Error: bad HTTP status code: %d", resp.StatusCode)
+	}
 
 	// Read and store the contents.
-	data, err := ioutil.ReadAll(resp.Body)
+	data, err := readAll(resp.Body)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	source.data = data
-	return nil
+
+	// Verify the data can be parsed.
+	var configs []discovery.StaticConfig
+	err = json.Unmarshal(data, &configs)
+	if err != nil {
+		// TODO: add metrics counting these errors.
+		return nil, err
+	}
+	return configs, nil
 }
