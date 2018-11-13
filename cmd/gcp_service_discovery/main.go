@@ -91,9 +91,11 @@ func main() {
 		log.Fatal(http.ListenAndServe(":9373", nil))
 	}()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	go func() {
 		// Run discovery forever.
-		manager.Run(context.Background(), *refresh)
+		manager.Run(ctx, *refresh)
 	}()
 
 	// Only sleep as long as we need to, before starting a new iteration.
