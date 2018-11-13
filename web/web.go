@@ -29,10 +29,9 @@ type Service struct {
 // should be an HTTP(S) URL to a file whose contents are a JSON formatted
 // Prometheus static_config.
 func NewService(srcURL string) *Service {
-	s := &Service{
+	return &Service{
 		srcURL: srcURL,
 	}
-	return s
 }
 
 // Discover downloads the source URL provided at service creation time.
