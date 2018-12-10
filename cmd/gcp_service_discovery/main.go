@@ -5,8 +5,6 @@
 // gcp_service_discovery supports the following sources:
 //  * App Engine Admin API - find AE Flex instances.
 //  * Container Engine API - find clusters annotated for federation scraping.
-//
-// TODO:
 //  * Generic HTTP(s) sources - download a pre-generated service discovery file.
 package main
 
@@ -46,9 +44,7 @@ func init() {
 
 func main() {
 	flag.Parse()
-	var start time.Time
 	manager := discovery.NewManager(*refresh)
-	factories := []discovery.Factory{}
 
 	if len(httpSources) != len(httpTargets) {
 		fmt.Fprintf(os.Stderr, "\n")
@@ -73,7 +69,8 @@ func main() {
 	}
 	if *gkeTarget != "" {
 		// Allocate a new authenticated client for GCE & GKE API.
-		factories = append(factories, gke.NewSourceFactory(*project, *gkeTarget))
+		s := gke.NewServiceMust(*project)
+		manager.Register(s, *gkeTarget)
 	}
 	for i := range httpSources {
 		// Allocate a new client for downloading an HTTP(S) source.
@@ -81,7 +78,7 @@ func main() {
 	}
 
 	// Verify that there is at least one source factory allocated before continuing.
-	if len(factories) == 0 && manager.Count() == 0 {
+	if manager.Count() == 0 {
 		flag.Usage()
 		fmt.Fprintf(os.Stderr, "\n")
 		fmt.Fprintf(os.Stderr, "Error: Specify at least one output target file.\n")
@@ -97,39 +94,6 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go func() {
-		// Run discovery forever.
-		manager.Run(ctx, *refresh)
-	}()
-
-	// Only sleep as long as we need to, before starting a new iteration.
-	for ; ; time.Sleep(*refresh - time.Since(start)) {
-		start = time.Now()
-		log.Printf("Starting a new round at: %s", start)
-
-		for i := range factories {
-			// Allocate a new authenticated client.
-			target, err := factories[i].Create()
-			if err != nil {
-				log.Printf("Failed to get client from factory: %s", err)
-				continue
-			}
-
-			// Collect targets and labels.
-			err = target.Collect()
-			if err != nil {
-				log.Printf("Failed to Collect targets: %s", err)
-				continue
-			}
-
-			// Write the targets to a file.
-			err = target.Save()
-			if err != nil {
-				log.Printf("Failed to save: %s", err)
-				continue
-			}
-		}
-
-		log.Printf("Finished round after: %s", time.Since(start))
-	}
+	// Run discovery forever.
+	manager.Run(ctx, *refresh)
 }
