@@ -152,7 +152,7 @@ func checkCluster(k kubernetes.Interface, zoneName, clusterName string) ([]disco
 		if service.ObjectMeta.Annotations["gke-prometheus-federation/scrape"] != "true" {
 			continue
 		}
-		target := findTargetAndLables(zoneName, clusterName, service)
+		target := findTargetAndLabels(zoneName, clusterName, service)
 		if target != nil {
 			configs = append(configs, *target)
 		}
@@ -160,9 +160,9 @@ func checkCluster(k kubernetes.Interface, zoneName, clusterName string) ([]disco
 	return configs, nil
 }
 
-// findTargetAndLables identifies the first target (first port) per service and
+// findTargetAndLabels identifies the first target (first port) per service and
 // returns a target configuration for use with Prometheus file service discovery.
-func findTargetAndLables(zoneName, clusterName string, service typesv1.Service) *discovery.StaticConfig {
+func findTargetAndLabels(zoneName, clusterName string, service typesv1.Service) *discovery.StaticConfig {
 	var target string
 
 	if len(service.Spec.ExternalIPs) > 0 && len(service.Spec.Ports) > 0 {
