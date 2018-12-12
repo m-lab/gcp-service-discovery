@@ -49,6 +49,156 @@ func (api *fakeAppAPIImpl) InstancesPages(
 }
 
 func TestService_Discover(t *testing.T) {
+	failureToListInstances := &fakeAppAPIImpl{
+		services: []*appengine.Service{
+			&appengine.Service{
+				Id: "fake-service-name",
+				Split: &appengine.TrafficSplit{
+					Allocations: map[string]float64{
+						"20181027t210126-active": 1.0,
+					},
+				},
+			},
+		},
+		versions: []*appengine.Version{
+			// Regular version.
+			&appengine.Version{
+				Id:            "20181027t210126-active",
+				ServingStatus: "SERVING",
+			},
+		},
+		instancesError: fmt.Errorf("failing to list instances"),
+	}
+	successManualScalingUDPPort := &fakeAppAPIImpl{
+		services: []*appengine.Service{
+			&appengine.Service{
+				Id: "fake-service-name",
+				Split: &appengine.TrafficSplit{
+					Allocations: map[string]float64{
+						"20181027t210126-active": 1.0,
+					},
+				},
+			},
+		},
+		versions: []*appengine.Version{
+			// Regular version.
+			&appengine.Version{
+				Id:            "20181027t210126-active",
+				ServingStatus: "SERVING",
+				Network: &appengine.Network{
+					ForwardedPorts: []string{"9090/udp"},
+				},
+				ManualScaling: &appengine.ManualScaling{
+					Instances: 1,
+				},
+			},
+			// Serving without network.
+			&appengine.Version{
+				Id:            "20181027t210126-inactive",
+				ServingStatus: "SERVING",
+				Network: &appengine.Network{
+					ForwardedPorts: []string{},
+				},
+				ManualScaling: &appengine.ManualScaling{
+					Instances: 1,
+				},
+			},
+			// Not serving.
+			&appengine.Version{
+				Id:            "20181027t210126-inactive",
+				ServingStatus: "STOPPED",
+			},
+		},
+		instances: []*appengine.Instance{
+			// A regular instance.
+			&appengine.Instance{
+				Id:       "aef-etl--sidestream--parser-20181027t210126-x2qh",
+				VmIp:     "192.168.0.2",
+				VmStatus: "RUNNING",
+			},
+			// Missing VmIp.
+			&appengine.Instance{
+				Id:       "aef-etl--sidestream--parser-20181027t210126-x2qi",
+				VmIp:     "",
+				VmStatus: "RUNNING",
+			},
+			// VM is stopped.
+			&appengine.Instance{
+				Id:       "aef-etl--sidestream--parser-20181027t210126-x2qj",
+				VmIp:     "192.168.0.2",
+				VmStatus: "STOPPED",
+			},
+		},
+	}
+	successAutomaticScalingTCPAndUDP := &fakeAppAPIImpl{
+		services: []*appengine.Service{
+			&appengine.Service{
+				Id: "fake-service-name",
+				Split: &appengine.TrafficSplit{
+					Allocations: map[string]float64{
+						"20181027t210126-active": 1.0,
+					},
+				},
+			},
+		},
+		versions: []*appengine.Version{
+			&appengine.Version{
+				Id:            "20181027t210126-active",
+				ServingStatus: "SERVING",
+				// When not specifying the protocol, "both" is expected.
+				Network: &appengine.Network{
+					ForwardedPorts: []string{"9090"},
+				},
+				AutomaticScaling: &appengine.AutomaticScaling{
+					MaxTotalInstances: 1,
+				},
+			},
+		},
+		instances: []*appengine.Instance{
+			&appengine.Instance{
+				Id:       "aef-etl--sidestream--parser-20181027t210126-x2qh",
+				VmIp:     "192.168.0.2",
+				VmStatus: "RUNNING",
+			},
+		},
+	}
+	successAutomaticScalingTCPPort := &fakeAppAPIImpl{
+		services: []*appengine.Service{
+			&appengine.Service{
+				Id: "fake-service-name",
+				Split: &appengine.TrafficSplit{
+					Allocations: map[string]float64{
+						"20181027t210126-active": 1.0,
+					},
+				},
+			},
+		},
+		versions: []*appengine.Version{
+			&appengine.Version{
+				Id:            "20181027t210126-active",
+				ServingStatus: "SERVING",
+				Network: &appengine.Network{
+					ForwardedPorts: []string{"9090/tcp"},
+				},
+				AutomaticScaling: &appengine.AutomaticScaling{
+					MaxTotalInstances: 1,
+				},
+			},
+			// Missing network.
+			&appengine.Version{
+				Id:            "20160000t210126-inactive",
+				ServingStatus: "SERVING",
+			},
+		},
+		instances: []*appengine.Instance{
+			&appengine.Instance{
+				Id:       "aef-etl--sidestream--parser-20181027t210126-x2qh",
+				VmIp:     "192.168.0.2",
+				VmStatus: "RUNNING",
+			},
+		},
+	}
+
 	tests := []struct {
 		name    string
 		project string
@@ -59,94 +209,15 @@ func TestService_Discover(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "failure-instances",
+			name:    "failure-to-list-instances",
 			project: "fake-project",
-			api: &fakeAppAPIImpl{
-				services: []*appengine.Service{
-					&appengine.Service{
-						Id: "fake-service-name",
-						Split: &appengine.TrafficSplit{
-							Allocations: map[string]float64{
-								"20181027t210126-active": 1.0,
-							},
-						},
-					},
-				},
-				versions: []*appengine.Version{
-					// Regular version.
-					&appengine.Version{
-						Id:            "20181027t210126-active",
-						ServingStatus: "SERVING",
-					},
-				},
-				instancesError: fmt.Errorf("failing to list instances."),
-			},
+			api:     failureToListInstances,
 			wantErr: true,
 		},
 		{
-			name:    "success-udp-manual",
+			name:    "success-manual-scaling-udp-port",
 			project: "fake-project",
-			api: &fakeAppAPIImpl{
-				services: []*appengine.Service{
-					&appengine.Service{
-						Id: "fake-service-name",
-						Split: &appengine.TrafficSplit{
-							Allocations: map[string]float64{
-								"20181027t210126-active": 1.0,
-							},
-						},
-					},
-				},
-				versions: []*appengine.Version{
-					// Regular version.
-					&appengine.Version{
-						Id:            "20181027t210126-active",
-						ServingStatus: "SERVING",
-						Network: &appengine.Network{
-							ForwardedPorts: []string{"9090/udp"},
-						},
-						ManualScaling: &appengine.ManualScaling{
-							Instances: 1,
-						},
-					},
-					// Serving without network.
-					&appengine.Version{
-						Id:            "20181027t210126-inactive",
-						ServingStatus: "SERVING",
-						Network: &appengine.Network{
-							ForwardedPorts: []string{},
-						},
-						ManualScaling: &appengine.ManualScaling{
-							Instances: 1,
-						},
-					},
-					// Not serving.
-					&appengine.Version{
-						Id:            "20181027t210126-inactive",
-						ServingStatus: "STOPPED",
-					},
-				},
-				instances: []*appengine.Instance{
-					// A regular instance.
-					&appengine.Instance{
-						Id:       "aef-etl--sidestream--parser-20181027t210126-x2qh",
-						VmIp:     "192.168.0.2",
-						VmStatus: "RUNNING",
-					},
-					// Missing VmIp.
-					&appengine.Instance{
-						Id:       "aef-etl--sidestream--parser-20181027t210126-x2qi",
-						VmIp:     "",
-						VmStatus: "RUNNING",
-					},
-					// VM is stopped.
-					&appengine.Instance{
-						Id:       "aef-etl--sidestream--parser-20181027t210126-x2qj",
-						VmIp:     "192.168.0.2",
-						VmStatus: "STOPPED",
-					},
-				},
-			},
+			api:     successManualScalingUDPPort,
 			want: []discovery.StaticConfig{
 				{
 					Targets: []string{"192.168.0.2:9090"},
@@ -163,40 +234,9 @@ func TestService_Discover(t *testing.T) {
 			},
 		},
 		{
-			name:    "success-both-automatic",
+			name:    "success-automatic-scaling-tcp-and-udp",
 			project: "fake-project",
-			api: &fakeAppAPIImpl{
-				services: []*appengine.Service{
-					&appengine.Service{
-						Id: "fake-service-name",
-						Split: &appengine.TrafficSplit{
-							Allocations: map[string]float64{
-								"20181027t210126-active": 1.0,
-							},
-						},
-					},
-				},
-				versions: []*appengine.Version{
-					&appengine.Version{
-						Id:            "20181027t210126-active",
-						ServingStatus: "SERVING",
-						// When not specifying the protocol, "both" is expected.
-						Network: &appengine.Network{
-							ForwardedPorts: []string{"9090"},
-						},
-						AutomaticScaling: &appengine.AutomaticScaling{
-							MaxTotalInstances: 1,
-						},
-					},
-				},
-				instances: []*appengine.Instance{
-					&appengine.Instance{
-						Id:       "aef-etl--sidestream--parser-20181027t210126-x2qh",
-						VmIp:     "192.168.0.2",
-						VmStatus: "RUNNING",
-					},
-				},
-			},
+			api:     successAutomaticScalingTCPAndUDP,
 			want: []discovery.StaticConfig{
 				{
 					Targets: []string{"192.168.0.2:9090"},
@@ -213,44 +253,9 @@ func TestService_Discover(t *testing.T) {
 			},
 		},
 		{
-			name:    "success-tcp-automatic",
+			name:    "success-automatic-scaling-tcp-port",
 			project: "fake-project",
-			api: &fakeAppAPIImpl{
-				services: []*appengine.Service{
-					&appengine.Service{
-						Id: "fake-service-name",
-						Split: &appengine.TrafficSplit{
-							Allocations: map[string]float64{
-								"20181027t210126-active": 1.0,
-							},
-						},
-					},
-				},
-				versions: []*appengine.Version{
-					&appengine.Version{
-						Id:            "20181027t210126-active",
-						ServingStatus: "SERVING",
-						Network: &appengine.Network{
-							ForwardedPorts: []string{"9090/tcp"},
-						},
-						AutomaticScaling: &appengine.AutomaticScaling{
-							MaxTotalInstances: 1,
-						},
-					},
-					// Missing network.
-					&appengine.Version{
-						Id:            "20160000t210126-inactive",
-						ServingStatus: "SERVING",
-					},
-				},
-				instances: []*appengine.Instance{
-					&appengine.Instance{
-						Id:       "aef-etl--sidestream--parser-20181027t210126-x2qh",
-						VmIp:     "192.168.0.2",
-						VmStatus: "RUNNING",
-					},
-				},
-			},
+			api:     successAutomaticScalingTCPPort,
 			want: []discovery.StaticConfig{
 				{
 					Targets: []string{"192.168.0.2:9090"},
