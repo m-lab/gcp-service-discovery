@@ -48,7 +48,8 @@ type Service struct {
 	cache string
 }
 
-// NewService create a new GKE service discovery instance.
+// NewServiceMust creates a new GKE service discovery instance. The function
+// exits if an error occurs during setup.
 func NewServiceMust(project string) *Service {
 	var err error
 
