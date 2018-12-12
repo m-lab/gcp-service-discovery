@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"regexp"
 	"strings"
 
@@ -34,9 +33,7 @@ var (
 	defaultScopes = []string{appengine.CloudPlatformScope, appengine.AppengineAdminScope}
 
 	// newAppengineClient allocates a new AppEngine client. The indirection facilitates testing.
-	newAppengineClient = func(client *http.Client) (*appengine.APIService, error) {
-		return appengine.New(client)
-	}
+	newAppengineClient = appengine.New
 )
 
 var (
@@ -98,8 +95,8 @@ type Service struct {
 	api iface.AppAPI
 }
 
-// NewService returns a discovery.Service initialized with authenticated clients for
-// App Engine Admin API, ready for Collection.
+// NewService returns a Service initialized with authenticated clients for
+// App Engine Admin API. The Service implements the discovery.Service interface.
 func NewService(project string) (*Service, error) {
 	source := &Service{
 		project: project,
