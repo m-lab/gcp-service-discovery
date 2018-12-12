@@ -12,12 +12,9 @@ before_install:
 
 script:
 # Run query "unit tests".
-- for module in discovery ; do
-    go test -v -short -covermode=count -coverprofile=${module}.cov github.com/m-lab/gcp-service-discovery/${module} ;
-  done
+- go test -v -short -covermode=count -coverprofile=merge.cov ./...
 
-# Coveralls
-- $HOME/gopath/bin/gocovmerge *.cov > merge.cov
+# Publish to coveralls
 - $HOME/gopath/bin/goveralls -coverprofile=merge.cov -service=travis-ci
 
 # Verify that the docker image builds.

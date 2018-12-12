@@ -18,6 +18,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/m-lab/go/rtx"
+
 	flag "github.com/spf13/pflag"
 
 	"github.com/m-lab/gcp-service-discovery/aeflex"
@@ -65,7 +67,9 @@ func main() {
 	// Allocate every relevant source factories.
 	if *aefTarget != "" {
 		// Allocate a new authenticated client for App Engine API.
-		factories = append(factories, aeflex.NewSourceFactory(*project, *aefTarget))
+		s, err := aeflex.NewService(*project)
+		rtx.Must(err, "Failed to create an aeflex.Service for project: %q", *project)
+		manager.Register(s, *aefTarget)
 	}
 	if *gkeTarget != "" {
 		// Allocate a new authenticated client for GCE & GKE API.
