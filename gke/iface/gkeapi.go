@@ -1,3 +1,6 @@
+// Package iface defines an interface for accessing Google Compute & Container
+// APIs, and helps mediate access to k8s clients. This is helpful for creating
+// testable packages.
 package iface
 
 import (
