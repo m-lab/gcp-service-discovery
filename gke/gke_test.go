@@ -19,18 +19,104 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
-func Test_checkCluster(t *testing.T) {
+// fakeGKEImpl implements the gke/iface.GKE interface.
+type fakeGKEImpl struct {
+	zones            *compute.ZoneList
+	clusters         *container.ListClustersResponse
+	Interface        kubernetes.Interface
+	zonePagesError   error
+	clusterListError error
+	kubeClientError  error
+}
+
+func (f *fakeGKEImpl) ZonePages(ctx context.Context, pageFunc func(zones *compute.ZoneList) error) error {
+	if f.zonePagesError != nil {
+		return f.zonePagesError
+	}
+	return pageFunc(f.zones)
+}
+
+func (f *fakeGKEImpl) ClusterList(ctx context.Context, zone string) (*container.ListClustersResponse, error) {
+	if f.clusterListError != nil {
+		return nil, f.clusterListError
+	}
+	return f.clusters, nil
+}
+
+func (f *fakeGKEImpl) GetKubeClient(c *container.Cluster) (kubernetes.Interface, error) {
+	if f.kubeClientError != nil {
+		return nil, f.kubeClientError
+	}
+	return f.Interface, nil
+}
+
+func TestMustNewService(t *testing.T) {
 	tests := []struct {
-		name        string
-		Interface   kubernetes.Interface
-		service     apiv1.Service
-		zoneName    string
-		clusterName string
-		want        []discovery.StaticConfig
-		wantErr     bool
+		name    string
+		project string
+		want    *Service
 	}{
 		{
-			name: "successful-external-ip",
+			name:    "success",
+			project: "fake-project",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_ = MustNewService(tt.project)
+		})
+	}
+}
+
+func TestService_Discover(t *testing.T) {
+	zoneList := &compute.ZoneList{
+		Items: []*compute.Zone{
+			{Name: "us-central1-z"},
+		},
+	}
+	clustersResponse := &container.ListClustersResponse{
+		Clusters: []*container.Cluster{
+			&container.Cluster{
+				Name: "fake-cluster",
+				MasterAuth: &container.MasterAuth{
+					ClusterCaCertificate: "",
+				},
+				Endpoint: "https://localhost:6443",
+			},
+		},
+	}
+	gkeSuccess := &fakeGKEImpl{
+		zones:    zoneList,
+		clusters: clustersResponse,
+	}
+	gkeWithZoneError := &fakeGKEImpl{
+		zonePagesError: fmt.Errorf("Failed to list zones"),
+		clusters:       clustersResponse,
+	}
+	gkeWithClusterError := &fakeGKEImpl{
+		zones:            zoneList,
+		clusterListError: fmt.Errorf("Failed to list clusters"),
+	}
+	gkeWithKubeError := &fakeGKEImpl{
+		zones:           zoneList,
+		clusters:        clustersResponse,
+		kubeClientError: fmt.Errorf("Failed to get kube client"),
+	}
+
+	tests := []struct {
+		name        string
+		project     string
+		gke         *fakeGKEImpl
+		service     apiv1.Service
+		ctx         context.Context
+		want        []discovery.StaticConfig
+		wantErr     bool
+		wantKubeErr bool
+	}{
+		{
+			name:    "success-target-with-external-ip",
+			project: "fake-project",
+			gke:     gkeSuccess,
 			service: apiv1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{"gke-prometheus-federation/scrape": "true"},
@@ -43,12 +129,14 @@ func Test_checkCluster(t *testing.T) {
 			want: []discovery.StaticConfig{
 				{
 					Targets: []string{"192.168.1.1:1122"},
-					Labels:  map[string]string{"zone": "", "service": "", "cluster": ""},
+					Labels:  map[string]string{"zone": "us-central1-z", "service": "", "cluster": "fake-cluster"},
 				},
 			},
 		},
 		{
-			name: "successful-loadbalancer",
+			name:    "success-target-with-loadbalancer-ingress",
+			project: "fake-project",
+			gke:     gkeSuccess,
 			service: apiv1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{"gke-prometheus-federation/scrape": "true"},
@@ -65,21 +153,14 @@ func Test_checkCluster(t *testing.T) {
 			want: []discovery.StaticConfig{
 				{
 					Targets: []string{"192.168.1.1:1122"},
-					Labels:  map[string]string{"zone": "", "service": "", "cluster": ""},
+					Labels:  map[string]string{"zone": "us-central1-z", "service": "", "cluster": "fake-cluster"},
 				},
 			},
 		},
 		{
-			name: "failure-skipping-annotation",
-			service: apiv1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{"gke-prometheus-federation/scrape": "false"},
-				},
-			},
-			want: []discovery.StaticConfig{},
-		},
-		{
-			name: "failure-empty-target",
+			name:    "success-target-empty",
+			project: "fake-project",
+			gke:     gkeSuccess,
 			service: apiv1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{"gke-prometheus-federation/scrape": "true"},
@@ -88,26 +169,73 @@ func Test_checkCluster(t *testing.T) {
 			want: []discovery.StaticConfig{},
 		},
 		{
-			name:    "failure-service-list-error",
+			name:    "success-skip-false-label",
+			project: "fake-project",
+			gke:     gkeSuccess,
+			service: apiv1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{"gke-prometheus-federation/scrape": "false"},
+				},
+			},
+			want: []discovery.StaticConfig{},
+		},
+		{
+			name:    "failure-using-kube-client",
+			project: "fake-project",
+			gke:     gkeSuccess,
+			service: apiv1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{"gke-prometheus-federation/scrape": "true"},
+				},
+				Spec: apiv1.ServiceSpec{
+					Ports:       []apiv1.ServicePort{{Port: 1122}},
+					ExternalIPs: []string{"192.168.1.1"},
+				},
+			},
+			wantKubeErr: true,
+			wantErr:     true,
+		},
+		{
+			name:    "failure-zone-list",
+			project: "fake-project",
+			gke:     gkeWithZoneError,
+			wantErr: true,
+		},
+		{
+			name:    "failure-cluster-list",
+			project: "fake-project",
+			gke:     gkeWithClusterError,
+			wantErr: true,
+		},
+		{
+			name:    "failure-get-kube-client",
+			project: "fake-project",
+			gke:     gkeWithKubeError,
 			wantErr: true,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			i := fake.NewSimpleClientset()
 			i.Fake.PrependReactor("list", "services", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-				if tt.wantErr {
+				if tt.wantKubeErr {
 					return true, nil, fmt.Errorf("Fake error")
 				}
 				return true, &apiv1.ServiceList{Items: []apiv1.Service{tt.service}}, nil
 			})
-			got, err := checkCluster(i, tt.zoneName, tt.clusterName)
+			tt.gke.Interface = i
+			s := &Service{
+				project: tt.project,
+				gke:     tt.gke,
+			}
+			got, err := s.Discover(tt.ctx)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("kubeOps.checkCluster() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("Service.Discover() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("kubeOps.checkCluster() = %#v, want %#v", got, tt.want)
+				t.Errorf("Service.Discover() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -147,119 +275,6 @@ func Test_getKubeClient(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("gkeClusterToKubeClient() error = %v, wantErr %v", err, tt.wantErr)
 				return
-			}
-		})
-	}
-}
-
-func TestNewServiceMust(t *testing.T) {
-	tests := []struct {
-		name    string
-		project string
-		want    *Service
-	}{
-		{
-			name:    "success",
-			project: "fake-project",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_ = NewServiceMust(tt.project)
-		})
-	}
-}
-
-type fakeGKEImpl struct {
-	project   string
-	zones     *compute.ZoneList
-	clusters  *container.ListClustersResponse
-	Interface kubernetes.Interface
-}
-
-func (f *fakeGKEImpl) ZonePages(ctx context.Context, pageFunc func(zones *compute.ZoneList) error) error {
-	return pageFunc(f.zones)
-}
-
-// ClusterList ...
-func (f *fakeGKEImpl) ClusterList(ctx context.Context, zone string) (*container.ListClustersResponse, error) {
-	return f.clusters, nil
-}
-
-func (f *fakeGKEImpl) GetKubeClient(c *container.Cluster) (kubernetes.Interface, error) {
-	return f.Interface, nil
-}
-
-func TestService_Discover(t *testing.T) {
-	fgke := &fakeGKEImpl{
-		project: "fake-project",
-		zones: &compute.ZoneList{
-			Items: []*compute.Zone{
-				{Name: "us-central1-z"},
-			},
-		},
-		clusters: &container.ListClustersResponse{
-			Clusters: []*container.Cluster{
-				&container.Cluster{
-					Name: "fake-cluster",
-					MasterAuth: &container.MasterAuth{
-						ClusterCaCertificate: "",
-					},
-					Endpoint: "https://localhost:6443",
-				},
-			},
-		},
-	}
-
-	tests := []struct {
-		name    string
-		project string
-		gke     *fakeGKEImpl
-		service apiv1.Service
-		ctx     context.Context
-		want    []discovery.StaticConfig
-		wantErr bool
-	}{
-		{
-			name:    "success",
-			project: "fake-project",
-			gke:     fgke,
-			service: apiv1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{"gke-prometheus-federation/scrape": "true"},
-				},
-				Spec: apiv1.ServiceSpec{
-					Ports:       []apiv1.ServicePort{{Port: 1122}},
-					ExternalIPs: []string{"192.168.1.1"},
-				},
-			},
-			want: []discovery.StaticConfig{
-				{
-					Targets: []string{"192.168.1.1:1122"},
-					Labels:  map[string]string{"zone": "us-central1-z", "service": "", "cluster": "fake-cluster"},
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			i := fake.NewSimpleClientset()
-			i.Fake.PrependReactor("list", "services", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-				return true, &apiv1.ServiceList{Items: []apiv1.Service{tt.service}}, nil
-			})
-			tt.gke.Interface = i
-			s := &Service{
-				project: tt.project,
-				gke:     tt.gke,
-			}
-			got, err := s.Discover(tt.ctx)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Service.Discover() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Service.Discover() = %v, want %v", got, tt.want)
 			}
 		})
 	}
