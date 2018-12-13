@@ -69,7 +69,7 @@ func main() {
 	}
 	if *gkeTarget != "" {
 		// Allocate a new authenticated client for GCE & GKE API.
-		s := gke.NewServiceMust(*project)
+		s := gke.MustNewService(*project)
 		manager.Register(s, *gkeTarget)
 	}
 	for i := range httpSources {
