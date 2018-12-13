@@ -23,8 +23,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 
-	// Uncomment the following line to load the gcp plugin (only required to authenticate against GKE clusters).
-	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"github.com/m-lab/gcp-service-discovery/discovery"
 )
 
@@ -48,9 +46,9 @@ type Service struct {
 	cache string
 }
 
-// NewServiceMust creates a new GKE service discovery instance. The function
+// MustNewService creates a new GKE service discovery instance. The function
 // exits if an error occurs during setup.
-func NewServiceMust(project string) *Service {
+func MustNewService(project string) *Service {
 	var err error
 
 	s := &Service{
