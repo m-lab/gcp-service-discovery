@@ -1,16 +1,17 @@
-// gke implements service discovery for GKE clusters with k8s services annotated
-// for federation scraping.
+// Package gke implements service discovery for GKE clusters with k8s services annotated
+// for federation collection.
 package gke
 
 import (
+	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 
-	"github.com/dchest/safefile"
-	"github.com/kr/pretty"
+	"github.com/m-lab/go/rtx"
+
+	"github.com/m-lab/gcp-service-discovery/gke/iface"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -21,8 +22,7 @@ import (
 	typesv1 "k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
-	// Uncomment the following line to load the gcp plugin (only required to authenticate against GKE clusters).
-	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+
 	"github.com/m-lab/gcp-service-discovery/discovery"
 )
 
@@ -32,144 +32,118 @@ var (
 	gkeScopes = []string{compute.CloudPlatformScope}
 )
 
-// Factory stores information needed to create new Source instances.
-type Factory struct {
+// Service contains necessary data for service discovery in GKE.
+type Service struct {
 	// The GCP project id.
 	project string
-
-	// The output filename.
-	filename string
-}
-
-// NewSourceFactory returns a new Factory object that can create new GKE Sources.
-func NewSourceFactory(project, filename string) *Factory {
-	return &Factory{
-		project:  project,
-		filename: filename,
-	}
-}
-
-// Create returns a discovery.Source initialized with authenticated clients for
-// Compute & Container APIs, ready for Collection.
-func (f *Factory) Create() (discovery.Source, error) {
-	source := &Source{
-		factory: *f,
-	}
-	var err error
-
-	// Create a new authenticated HTTP client.
-	source.client, err = google.DefaultClient(oauth2.NoContext, gkeScopes...)
-	if err != nil {
-		return nil, fmt.Errorf("Error setting up Compute client: %s", err)
-	}
-
-	// Create a new Compute service instance.
-	source.computeService, err = compute.New(source.client)
-	if err != nil {
-		return nil, fmt.Errorf("Error setting up Compute client: %s", err)
-	}
-
-	// Create a new Container Engine service object.
-	source.containerService, err = container.New(source.client)
-	if err != nil {
-		return nil, fmt.Errorf("Error setting up Container Engine client: %s", err)
-	}
-
-	return source, nil
-}
-
-// Source caches information collected from the GCE, GKE, and K8S APIs during target discovery.
-type Source struct {
-	// factory is a copy of the original instance that created this source.
-	factory Factory
 
 	// client caches an http client authenticated for access to GCP APIs.
 	client *http.Client
 
-	// computeService is the entry point to all GCE services.
-	computeService *compute.Service
+	gke iface.GKE
 
-	// containerService is the entry point to all GKE services.
-	containerService *container.Service
-
-	// targets collects found targets.
-	targets []interface{}
+	// cache is temporary storage to determine whether to update.
+	cache string
 }
 
-// Saves collected targets to the given filename.
-func (source *Source) Save() error {
-	// Convert the targets to JSON.
-	data, err := json.MarshalIndent(source.targets, "", "    ")
-	if err != nil {
-		log.Printf("Failed to Marshal JSON: %s", err)
-		log.Printf("Pretty data: %s", pretty.Sprint(source.targets))
-		return err
-	}
+// MustNewService creates a new GKE service discovery instance. The function
+// exits if an error occurs during setup.
+func MustNewService(project string) *Service {
+	var err error
 
-	// Save targets to output file.
-	log.Printf("Saving: %s", source.factory.filename)
-	err = safefile.WriteFile(source.factory.filename, data, 0644)
-	if err != nil {
-		log.Printf("Failed to write %s: %s", source.factory.filename, err)
-		return err
+	s := &Service{
+		project: project,
 	}
-	return nil
+	// Create a new authenticated HTTP client.
+	s.client, err = google.DefaultClient(oauth2.NoContext, gkeScopes...)
+	rtx.Must(err, "Error setting up default client")
+
+	// Create a new Compute service instance.
+	computeService, err := compute.New(s.client)
+	rtx.Must(err, "Error setting up a Compute API client")
+
+	// Create a new Container Engine service object.
+	containerService, err := container.New(s.client)
+	rtx.Must(err, "Error setting up a Container API client")
+
+	s.gke = iface.NewGKE(project, computeService, containerService, getKubeClient)
+	return s
 }
 
-// Collect uses the Compute Engine, Container Engine, and Kubernetes APIs to
+// Discover uses the Compute Engine, Container Engine, and Kubernetes APIs to
 // check every GCE zone for Container Engine (gke) clusters, and checks each
 // cluster for services annotated for federated scraping.
 //
 // Collect returns every gke cluster with a k8s service annotation that equals:
 //    gke-prometheus-federation/scrape: true
-func (source *Source) Collect() error {
-	// Allocate space for the list of targets.
-	source.targets = make([]interface{}, 0)
+func (s *Service) Discover(ctx context.Context) ([]discovery.StaticConfig, error) {
+	targets := []discovery.StaticConfig{}
 
 	// Get all zones in a project.
-	zoneListCall := source.computeService.Zones.List(source.factory.project)
-	err := zoneListCall.Pages(nil, func(zones *compute.ZoneList) error {
+	zones, err := s.getZoneList(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, zone := range zones {
+		t, err := s.findTargetsFromZone(ctx, zone)
+		if err != nil {
+			return nil, err
+		}
+		targets = append(targets, t...)
+	}
+	return targets, err
+}
+
+func (s *Service) getZoneList(ctx context.Context) ([]string, error) {
+	zoneNames := []string{}
+	err := s.gke.ZonePages(ctx, func(zones *compute.ZoneList) error {
 		for _, zone := range zones.Items {
-
-			// Get all clusters in a zone.
-			clusterList, err := source.containerService.Projects.Zones.Clusters.List(
-				source.factory.project, zone.Name).Do()
-			if err != nil {
-				return err
-			}
-
-			// Look for targets from every cluster.
-			for _, cluster := range clusterList.Clusters {
-				targets, err := checkCluster(zone, cluster)
-				if err != nil {
-					return err
-				}
-				source.targets = append(source.targets, targets...)
-			}
+			zoneNames = append(zoneNames, zone.Name)
 		}
 		return nil
 	})
-	// TODO(p2, soltesz): consider using goroutines to speed up collection.
-	return err
+	return zoneNames, err
 }
 
-// checkCluster uses the kubernetes API to search for GKE targets.
-func checkCluster(zone *compute.Zone, cluster *container.Cluster) ([]interface{}, error) {
-	targets := []interface{}{}
-	// Use information from the GKE cluster to create a k8s API client.
-	kubeClient, err := gkeClusterToKubeClient(cluster)
+func (s *Service) findTargetsFromZone(ctx context.Context, zoneName string) ([]discovery.StaticConfig, error) {
+	targets := []discovery.StaticConfig{}
+
+	// Get all clusters in a zone.
+	clusters, err := s.gke.ClusterList(ctx, zoneName)
 	if err != nil {
 		return nil, err
 	}
 
+	// Look for targets from every cluster.
+	for _, cluster := range clusters.Clusters {
+		// Use information from the GKE cluster to create a k8s API client.
+
+		// TODO: consider using new interface, like getKubeClient(cluster *container.Cluster)
+		kubeClient, err := s.gke.GetKubeClient(cluster)
+		if err != nil {
+			return nil, err
+		}
+		t, err := checkCluster(kubeClient, zoneName, cluster.Name)
+		if err != nil {
+			return nil, err
+		}
+		targets = append(targets, t...)
+	}
+	return targets, nil
+}
+
+// checkCluster uses the kubernetes API to search for GKE targets.
+func checkCluster(k kubernetes.Interface, zoneName, clusterName string) ([]discovery.StaticConfig, error) {
+	configs := []discovery.StaticConfig{}
+
 	// List all services in the k8s cluster.
-	services, err := kubeClient.CoreV1().Services("").List(metav1.ListOptions{})
+	services, err := k.CoreV1().Services("").List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
 
 	log.Printf("%s - %s - There are %d services in the cluster\n",
-		zone.Name, cluster.Name, len(services.Items))
+		zoneName, clusterName, len(services.Items))
 
 	// Check each service, and collect targets that have matching annotations.
 	for _, service := range services.Items {
@@ -177,17 +151,17 @@ func checkCluster(zone *compute.Zone, cluster *container.Cluster) ([]interface{}
 		if service.ObjectMeta.Annotations["gke-prometheus-federation/scrape"] != "true" {
 			continue
 		}
-		values := findTargetAndLables(zone, cluster, service)
-		if values != nil {
-			targets = append(targets, values)
+		target := findTargetAndLabels(zoneName, clusterName, service)
+		if target != nil {
+			configs = append(configs, *target)
 		}
 	}
-	return targets, nil
+	return configs, nil
 }
 
-// findTargetAndLables identifies the first target (first port) per service and
+// findTargetAndLabels identifies the first target (first port) per service and
 // returns a target configuration for use with Prometheus file service discovery.
-func findTargetAndLables(zone *compute.Zone, cluster *container.Cluster, service typesv1.Service) interface{} {
+func findTargetAndLabels(zoneName, clusterName string, service typesv1.Service) *discovery.StaticConfig {
 	var target string
 
 	if len(service.Spec.ExternalIPs) > 0 && len(service.Spec.Ports) > 0 {
@@ -216,20 +190,19 @@ func findTargetAndLables(zone *compute.Zone, cluster *container.Cluster, service
 	if target == "" {
 		return nil
 	}
-	values := map[string]interface{}{
-		"labels": map[string]string{
+	return &discovery.StaticConfig{
+		Targets: []string{target},
+		Labels: map[string]string{
 			"service": service.ObjectMeta.Name,
-			"cluster": cluster.Name,
-			"zone":    zone.Name,
+			"cluster": clusterName,
+			"zone":    zoneName,
 		},
-		"targets": []string{target},
 	}
-	return values
 }
 
-// gkeClusterToKubeClient converts a container engine API Cluster object into
+// getKubeClient converts a container engine API Cluster object into
 // a kubernetes API client instance.
-func gkeClusterToKubeClient(c *container.Cluster) (*kubernetes.Clientset, error) {
+func getKubeClient(c *container.Cluster) (kubernetes.Interface, error) {
 	// The cluster CA certificate is base64 encoded from the GKE API.
 	rawCaCert, err := base64.URLEncoding.DecodeString(c.MasterAuth.ClusterCaCertificate)
 	if err != nil {
@@ -244,7 +217,7 @@ func gkeClusterToKubeClient(c *container.Cluster) (*kubernetes.Clientset, error)
 	clusterClient := api.Config{
 		Clusters: map[string]*api.Cluster{
 			// Define the cluster address and CA Certificate.
-			"cluster": &api.Cluster{
+			"cluster": {
 				Server:                   fmt.Sprintf("https://%s", c.Endpoint),
 				InsecureSkipTLSVerify:    false, // Require a valid CA Certificate.
 				CertificateAuthorityData: rawCaCert,
@@ -252,14 +225,14 @@ func gkeClusterToKubeClient(c *container.Cluster) (*kubernetes.Clientset, error)
 		},
 		AuthInfos: map[string]*api.AuthInfo{
 			// Define the user credentials for access to the API.
-			"user": &api.AuthInfo{
+			"user": {
 				Username: c.MasterAuth.Username,
 				Password: c.MasterAuth.Password,
 			},
 		},
 		Contexts: map[string]*api.Context{
 			// Define a context that refers to the above cluster and user.
-			"cluster-user": &api.Context{
+			"cluster-user": {
 				Cluster:  "cluster",
 				AuthInfo: "user",
 			},
@@ -268,10 +241,13 @@ func gkeClusterToKubeClient(c *container.Cluster) (*kubernetes.Clientset, error)
 		CurrentContext: "cluster-user",
 	}
 
-	// TODO: what is this?
-	restConfig, err := clientcmd.NewDefaultClientConfig(
-		clusterClient, &clientcmd.ConfigOverrides{
-			ClusterInfo: api.Cluster{Server: ""}}).ClientConfig()
+	// Construct a "direct client" using the auth above to contact the API server.
+	defClient := clientcmd.NewDefaultClientConfig(
+		clusterClient,
+		&clientcmd.ConfigOverrides{
+			ClusterInfo: api.Cluster{Server: ""},
+		})
+	restConfig, err := defClient.ClientConfig()
 	if err != nil {
 		return nil, err
 	}
