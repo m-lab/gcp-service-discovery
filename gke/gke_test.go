@@ -1,5 +1,3 @@
-// gke implements service discovery for GKE clusters with k8s services annotated
-// for federation scraping.
 package gke
 
 import (
@@ -51,21 +49,7 @@ func (f *fakeGKEImpl) GetKubeClient(c *container.Cluster) (kubernetes.Interface,
 }
 
 func TestMustNewService(t *testing.T) {
-	tests := []struct {
-		name    string
-		project string
-		want    *Service
-	}{
-		{
-			name:    "success",
-			project: "fake-project",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_ = MustNewService(tt.project)
-		})
-	}
+	_ = MustNewService("fake-project")
 }
 
 func TestService_Discover(t *testing.T) {
