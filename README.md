@@ -1,4 +1,4 @@
-[![Go Report Card](https://goreportcard.com/badge/github.com/m-lab/gcp-service-discovery)](https://goreportcard.com/report/github.com/m-lab/gcp-service-discovery) [![Build Status](https://travis-ci.org/m-lab/gcp-service-discovery.svg?branch=master)](https://travis-ci.org/m-lab/gcp-service-discovery) [![Coverage Status](https://coveralls.io/repos/github/m-lab/gcp-service-discovery/badge.svg?branch=master)](https://coveralls.io/github/m-lab/gcp-service-discovery?branch=master)
+[![GoDoc](https://godoc.org/github.com/m-lab/pusher?status.svg)](https://godoc.org/github.com/m-lab/pusher) [![Go Report Card](https://goreportcard.com/badge/github.com/m-lab/gcp-service-discovery)](https://goreportcard.com/report/github.com/m-lab/gcp-service-discovery) [![Build Status](https://travis-ci.org/m-lab/gcp-service-discovery.svg?branch=master)](https://travis-ci.org/m-lab/gcp-service-discovery) [![Coverage Status](https://coveralls.io/repos/github/m-lab/gcp-service-discovery/badge.svg?branch=master)](https://coveralls.io/github/m-lab/gcp-service-discovery?branch=master)
 
 # gcp-service-discovery
 
