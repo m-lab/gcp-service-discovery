@@ -51,7 +51,7 @@ func (api *fakeAppAPIImpl) InstancesPages(
 func TestService_Discover(t *testing.T) {
 	failureToListInstances := &fakeAppAPIImpl{
 		services: []*appengine.Service{
-			&appengine.Service{
+			{
 				Id: "fake-service-name",
 				Split: &appengine.TrafficSplit{
 					Allocations: map[string]float64{
@@ -62,7 +62,7 @@ func TestService_Discover(t *testing.T) {
 		},
 		versions: []*appengine.Version{
 			// Regular version.
-			&appengine.Version{
+			{
 				Id:            "20181027t210126-active",
 				ServingStatus: "SERVING",
 			},
@@ -71,7 +71,7 @@ func TestService_Discover(t *testing.T) {
 	}
 	successManualScalingUDPPort := &fakeAppAPIImpl{
 		services: []*appengine.Service{
-			&appengine.Service{
+			{
 				Id: "fake-service-name",
 				Split: &appengine.TrafficSplit{
 					Allocations: map[string]float64{
@@ -82,7 +82,7 @@ func TestService_Discover(t *testing.T) {
 		},
 		versions: []*appengine.Version{
 			// Regular version.
-			&appengine.Version{
+			{
 				Id:            "20181027t210126-active",
 				ServingStatus: "SERVING",
 				Network: &appengine.Network{
@@ -93,7 +93,7 @@ func TestService_Discover(t *testing.T) {
 				},
 			},
 			// Serving without network.
-			&appengine.Version{
+			{
 				Id:            "20181027t210126-inactive",
 				ServingStatus: "SERVING",
 				Network: &appengine.Network{
@@ -104,26 +104,26 @@ func TestService_Discover(t *testing.T) {
 				},
 			},
 			// Not serving.
-			&appengine.Version{
+			{
 				Id:            "20181027t210126-inactive",
 				ServingStatus: "STOPPED",
 			},
 		},
 		instances: []*appengine.Instance{
 			// A regular instance.
-			&appengine.Instance{
+			{
 				Id:       "aef-etl--sidestream--parser-20181027t210126-x2qh",
 				VmIp:     "192.168.0.2",
 				VmStatus: "RUNNING",
 			},
 			// Missing VmIp.
-			&appengine.Instance{
+			{
 				Id:       "aef-etl--sidestream--parser-20181027t210126-x2qi",
 				VmIp:     "",
 				VmStatus: "RUNNING",
 			},
 			// VM is stopped.
-			&appengine.Instance{
+			{
 				Id:       "aef-etl--sidestream--parser-20181027t210126-x2qj",
 				VmIp:     "192.168.0.2",
 				VmStatus: "STOPPED",
@@ -132,7 +132,7 @@ func TestService_Discover(t *testing.T) {
 	}
 	successAutomaticScalingTCPAndUDP := &fakeAppAPIImpl{
 		services: []*appengine.Service{
-			&appengine.Service{
+			{
 				Id: "fake-service-name",
 				Split: &appengine.TrafficSplit{
 					Allocations: map[string]float64{
@@ -142,7 +142,7 @@ func TestService_Discover(t *testing.T) {
 			},
 		},
 		versions: []*appengine.Version{
-			&appengine.Version{
+			{
 				Id:            "20181027t210126-active",
 				ServingStatus: "SERVING",
 				// When not specifying the protocol, "both" is expected.
@@ -155,7 +155,7 @@ func TestService_Discover(t *testing.T) {
 			},
 		},
 		instances: []*appengine.Instance{
-			&appengine.Instance{
+			{
 				Id:       "aef-etl--sidestream--parser-20181027t210126-x2qh",
 				VmIp:     "192.168.0.2",
 				VmStatus: "RUNNING",
@@ -164,7 +164,7 @@ func TestService_Discover(t *testing.T) {
 	}
 	successAutomaticScalingTCPPort := &fakeAppAPIImpl{
 		services: []*appengine.Service{
-			&appengine.Service{
+			{
 				Id: "fake-service-name",
 				Split: &appengine.TrafficSplit{
 					Allocations: map[string]float64{
@@ -174,7 +174,7 @@ func TestService_Discover(t *testing.T) {
 			},
 		},
 		versions: []*appengine.Version{
-			&appengine.Version{
+			{
 				Id:            "20181027t210126-active",
 				ServingStatus: "SERVING",
 				Network: &appengine.Network{
@@ -185,13 +185,13 @@ func TestService_Discover(t *testing.T) {
 				},
 			},
 			// Missing network.
-			&appengine.Version{
+			{
 				Id:            "20160000t210126-inactive",
 				ServingStatus: "SERVING",
 			},
 		},
 		instances: []*appengine.Instance{
-			&appengine.Instance{
+			{
 				Id:       "aef-etl--sidestream--parser-20181027t210126-x2qh",
 				VmIp:     "192.168.0.2",
 				VmStatus: "RUNNING",
