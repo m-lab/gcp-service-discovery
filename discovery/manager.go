@@ -1,4 +1,4 @@
-// Package manager manages and runs service discovery and saves target
+// Package discovery manages and runs service discovery and saves target
 // configuration files.
 package discovery
 
