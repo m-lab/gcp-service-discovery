@@ -60,7 +60,7 @@ func TestService_Discover(t *testing.T) {
 	}
 	clustersResponse := &container.ListClustersResponse{
 		Clusters: []*container.Cluster{
-			&container.Cluster{
+			{
 				Name: "fake-cluster",
 				MasterAuth: &container.MasterAuth{
 					ClusterCaCertificate: "",
