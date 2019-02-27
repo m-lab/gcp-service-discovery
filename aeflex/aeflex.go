@@ -16,6 +16,7 @@ import (
 	appengine "google.golang.org/api/appengine/v1"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 const (
@@ -43,7 +44,7 @@ var (
 	//   gcp_aeflex_services
 	// Example usage:
 	//   ServiceCount.Set(count)
-	ServiceCount = prometheus.NewGauge(
+	ServiceCount = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "gcp_aeflex_services",
 			Help: "Number of active AEFlex services.",
@@ -56,7 +57,7 @@ var (
 	//   gcp_aeflex_versions{service="etl-batch-parser"}
 	// Example usage:
 	//   VersionCount.WithLabelValues("etl-batch-parser").Set(count)
-	VersionCount = prometheus.NewGaugeVec(
+	VersionCount = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "gcp_aeflex_versions",
 			Help: "Total number of versions.",
@@ -70,7 +71,7 @@ var (
 	//   gcp_aeflex_instances{service="etl-batch-parser", serving="true"}
 	// Example usage:
 	//   InstanceCount.WithLabelValues("etl-batch-parser", "true").Set(count)
-	InstanceCount = prometheus.NewGaugeVec(
+	InstanceCount = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "gcp_aeflex_instances",
 			Help: "Total number of running serving instances.",
@@ -78,12 +79,6 @@ var (
 		[]string{"service", "active"},
 	)
 )
-
-func init() {
-	prometheus.MustRegister(ServiceCount)
-	prometheus.MustRegister(VersionCount)
-	prometheus.MustRegister(InstanceCount)
-}
 
 // Service caches information collected from the App Engine Admin API during target discovery.
 type Service struct {
