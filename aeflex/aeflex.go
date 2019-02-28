@@ -116,6 +116,7 @@ func NewService(project string) (*Service, error) {
 func (source *Service) Discover(ctx context.Context) ([]discovery.StaticConfig, error) {
 	// List all services.
 	services := 0
+	source.targets = []discovery.StaticConfig{}
 	err := source.api.ServicesPages(
 		ctx, func(listSvc *appengine.ListServicesResponse) error {
 			services += len(listSvc.Services)

@@ -289,6 +289,15 @@ func TestService_Discover(t *testing.T) {
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Service.Discover() = %v, want %v", got, tt.want)
 			}
+			// Call Discover again, to verify it returns the same set of targets.
+			got2, err := source.Discover(tt.ctx)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Service.Discover() error = %v", err)
+				return
+			}
+			if !reflect.DeepEqual(got, got2) {
+				t.Errorf("Service.Discover() = %v, want %v", got, got2)
+			}
 		})
 	}
 }
