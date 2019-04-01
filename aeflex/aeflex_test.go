@@ -8,10 +8,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/m-lab/go/prometheusx"
-
 	"github.com/m-lab/gcp-service-discovery/aeflex/iface"
 	"github.com/m-lab/gcp-service-discovery/discovery"
+	"github.com/m-lab/go/prometheusx/promtest"
 	appengine "google.golang.org/api/appengine/v1"
 )
 
@@ -356,5 +355,5 @@ func TestNewService(t *testing.T) {
 func TestMetrics(t *testing.T) {
 	InstanceCount.WithLabelValues("x", "x")
 	VersionCount.WithLabelValues("x")
-	prometheusx.LintMetrics(t)
+	promtest.LintMetrics(t)
 }
