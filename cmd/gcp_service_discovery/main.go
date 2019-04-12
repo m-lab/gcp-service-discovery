@@ -10,15 +10,14 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"time"
 
+	"github.com/m-lab/go/flagx"
 	"github.com/m-lab/go/prometheusx"
-
 	"github.com/m-lab/go/rtx"
-
-	flag "github.com/spf13/pflag"
 
 	"github.com/m-lab/gcp-service-discovery/aeflex"
 	"github.com/m-lab/gcp-service-discovery/discovery"
@@ -27,22 +26,28 @@ import (
 )
 
 var (
-	httpSources = []string{}
-	httpTargets = []string{}
-	project     = flag.String("project", "", "GCP project name.")
-	aefTarget   = flag.String("aef-target", "", "Write targets configuration to given filename.")
-	gkeTarget   = flag.String("gke-target", "", "Write targets configuration to given filename.")
-	refresh     = flag.Duration("refresh", time.Minute, "Number of seconds between refreshing.")
+	httpSources  = flagx.StringArray{}
+	httpTargets  = flagx.StringArray{}
+	project      = flag.String("project", "", "GCP project name.")
+	aefTarget    = flag.String("aef-target", "", "Write targets configuration to given filename.")
+	gkeTarget    = flag.String("gke-target", "", "Write targets configuration to given filename.")
+	refresh      = flag.Duration("refresh", time.Minute, "Number of seconds between refreshing.")
+	maxDiscovery = flag.Duration("max-discovery", 10*time.Minute, "Maximum time allowed for service discovery.")
 )
 
 func init() {
-	flag.StringArrayVar(&httpSources, "http-source", nil, "Read configuration from HTTP(S) source.")
-	flag.StringArrayVar(&httpTargets, "http-target", nil, "Write HTTP(S) source to the given filename.")
+	flag.Var(&httpSources, "http-source", "Read configuration from HTTP(S) source.")
+	flag.Var(&httpTargets, "http-target", "Write HTTP(S) source to the given filename.")
+
+	// Override default because port is allocated from:
+	// https://github.com/prometheus/prometheus/wiki/Default-port-allocations
+	// --prometheusx.listen-address still works as intended.
+	*prometheusx.ListenAddress = ":9373"
 }
 
 func main() {
 	flag.Parse()
-	manager := discovery.NewManager(*refresh)
+	manager := discovery.NewManager(*maxDiscovery)
 
 	if len(httpSources) != len(httpTargets) {
 		fmt.Fprintf(os.Stderr, "\n")
@@ -83,9 +88,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Port allocated from:
-	// https://github.com/prometheus/prometheus/wiki/Default-port-allocations
-	prometheusx.MustStartPrometheus(":9373")
+	srv := prometheusx.MustServeMetrics()
+	defer srv.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
