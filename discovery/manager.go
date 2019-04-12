@@ -89,8 +89,10 @@ func (m *Manager) Run(ctx context.Context, interval time.Duration) {
 	for {
 		// TODO: add waitgroup and run discovery in parallel.
 		for i := range m.services {
+			// Label the discoveryDurationHist by service name. Labeling by service
+			// provides better histogram fidelity.
 			service := strings.TrimPrefix(fmt.Sprintf("%T", m.services[i]), "*")
-			t0 := time.Now()
+			startTime := time.Now()
 			disCtx, cancel := context.WithTimeout(ctx, m.Timeout)
 			configs, err := m.services[i].Discover(disCtx)
 			cancel()
@@ -99,7 +101,7 @@ func (m *Manager) Run(ctx context.Context, interval time.Duration) {
 				discoveryTotal.WithLabelValues(service, "error-discovery").Inc()
 				continue
 			}
-			discoveryDurationHist.WithLabelValues(service).Observe(time.Since(t0).Seconds())
+			discoveryDurationHist.WithLabelValues(service).Observe(time.Since(startTime).Seconds())
 			err = writeConfigToFile(configs, m.output[i])
 			if err != nil {
 				log.Printf("Error: %s: %s", m.output[i], err)
