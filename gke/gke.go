@@ -248,14 +248,8 @@ func getKubeClient(c *container.Cluster) (kubernetes.Interface, error) {
 			ClusterInfo: api.Cluster{Server: ""},
 		})
 	restConfig, err := defClient.ClientConfig()
-	if err != nil {
-		return nil, err
-	}
+	rtx.Must(err, "Failed to get REST config from DefaultClientConfig")
 
 	// Creates the k8s clientset.
-	kubeClient, err := kubernetes.NewForConfig(restConfig)
-	if err != nil {
-		return nil, err
-	}
-	return kubeClient, nil
+	return kubernetes.NewForConfig(restConfig)
 }
