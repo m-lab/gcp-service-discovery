@@ -66,6 +66,7 @@ func TestService_Discover(t *testing.T) {
 			{
 				Id:            "20181027t210126-active",
 				ServingStatus: "SERVING",
+				CreateTime:    "2018-10-27T21:01:26Z",
 			},
 		},
 		instancesError: fmt.Errorf("failing to list instances"),
@@ -86,6 +87,7 @@ func TestService_Discover(t *testing.T) {
 			{
 				Id:            "20181027t210126-active",
 				ServingStatus: "SERVING",
+				CreateTime:    "2018-10-27T21:01:26Z",
 				Network: &appengine.Network{
 					ForwardedPorts: []string{"9090/udp"},
 				},
@@ -97,6 +99,7 @@ func TestService_Discover(t *testing.T) {
 			{
 				Id:            "20181027t210126-inactive",
 				ServingStatus: "SERVING",
+				CreateTime:    "2018-10-27T21:01:26Z",
 				Network: &appengine.Network{
 					ForwardedPorts: []string{},
 				},
@@ -108,6 +111,7 @@ func TestService_Discover(t *testing.T) {
 			{
 				Id:            "20181027t210126-inactive",
 				ServingStatus: "STOPPED",
+				CreateTime:    "2018-10-27T21:01:26Z",
 			},
 		},
 		instances: []*appengine.Instance{
@@ -146,6 +150,7 @@ func TestService_Discover(t *testing.T) {
 			{
 				Id:            "20181027t210126-active",
 				ServingStatus: "SERVING",
+				CreateTime:    "2018-10-27T21:01:26Z",
 				// When not specifying the protocol, "both" is expected.
 				Network: &appengine.Network{
 					ForwardedPorts: []string{"9090"},
@@ -178,6 +183,7 @@ func TestService_Discover(t *testing.T) {
 			{
 				Id:            "20181027t210126-active",
 				ServingStatus: "SERVING",
+				CreateTime:    "2018-10-27T21:01:26Z",
 				Network: &appengine.Network{
 					ForwardedPorts: []string{"9090/tcp"},
 				},
@@ -187,8 +193,15 @@ func TestService_Discover(t *testing.T) {
 			},
 			// Missing network.
 			{
-				Id:            "20160000t210126-inactive",
+				Id:            "20160101t210126-inactive",
 				ServingStatus: "SERVING",
+				CreateTime:    "2016-01-01T21:01:26Z",
+			},
+			// Includes bad format for CreateTime.
+			{
+				Id:            "20160101t210126-inactive",
+				ServingStatus: "SERVING",
+				CreateTime:    "2016-00-01T21:01:26Z", // Invalid month.
 			},
 		},
 		instances: []*appengine.Instance{
