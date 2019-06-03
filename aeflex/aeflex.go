@@ -7,6 +7,7 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"time"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -164,16 +165,28 @@ func (source *Service) handleVersions(
 		if version.ServingStatus != "SERVING" {
 			continue
 		}
+
+		created, err := time.Parse(time.RFC3339, version.CreateTime)
+		if err != nil {
+			log.Println("Failed to parse version.CreateTime:", version.CreateTime)
+			continue
+		}
+
+		// For servers that have advanced "warm up" phases, it is helpful to
+		// monitor them before they are reported as "SERVING" traffic.
+		// We "shouldMonitorBeforeServing" if the version was created within the last 20min.
+		shouldMonitorBeforeServing := time.Now().UTC().Sub(created) < 20*time.Minute
+
 		// This version has "SERVING" instances. Can it receive traffic?
 		// We don't want to monitor versions that will receive no traffic.
 		// This can occur during incomplete deployments.
 		_, shouldMonitor := service.Split.Allocations[version.Id]
 
 		// List instances associated with each service version.
-		err := source.api.InstancesPages(
+		err = source.api.InstancesPages(
 			ctx, service.Id, version.Id, func(listInst *appengine.ListInstancesResponse) error {
 				found, err := source.handleInstances(listInst, service, version, shouldMonitor)
-				if shouldMonitor {
+				if shouldMonitor || shouldMonitorBeforeServing {
 					*active += found
 				} else {
 					*inactive += found
