@@ -9,11 +9,11 @@ import (
 	"github.com/m-lab/gcp-service-discovery/discovery"
 	compute "google.golang.org/api/compute/v1"
 	container "google.golang.org/api/container/v1"
+	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
-	apiv1 "k8s.io/client-go/pkg/api/v1"
 	k8stesting "k8s.io/client-go/testing"
 )
 
