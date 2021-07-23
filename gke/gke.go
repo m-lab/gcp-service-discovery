@@ -137,7 +137,7 @@ func checkCluster(k kubernetes.Interface, zoneName, clusterName string) ([]disco
 	configs := []discovery.StaticConfig{}
 
 	// List all services in the k8s cluster.
-	services, err := k.CoreV1().Services("").List(metav1.ListOptions{})
+	services, err := k.CoreV1().Services("").List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
