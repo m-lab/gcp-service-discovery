@@ -226,8 +226,8 @@ func getKubeClient(c *container.Cluster) (kubernetes.Interface, error) {
 		AuthInfos: map[string]*api.AuthInfo{
 			// Define the user credentials for access to the API.
 			"user": {
-				Username: c.MasterAuth.Username,
-				Password: c.MasterAuth.Password,
+				ClientKey:         c.MasterAuth.ClientKey,
+				ClientCertificate: c.MasterAuth.ClientCertificate,
 			},
 		},
 		Contexts: map[string]*api.Context{
