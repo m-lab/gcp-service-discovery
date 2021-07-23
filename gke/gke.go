@@ -209,6 +209,12 @@ func getKubeClient(c *container.Cluster) (kubernetes.Interface, error) {
 		return nil, err
 	}
 
+	// The cert and key used to authenticate to the GKE cluster.
+	clientKey, err := base64.StdEncoding.DecodeString(c.MasterAuth.ClientKey)
+	rtx.Must(err, "Failed to decode cluster client key")
+	clientCert, err := base64.StdEncoding.DecodeString(c.MasterAuth.ClientCertificate)
+	rtx.Must(err, "Failed to decode cluster client certificate")
+
 	// This is a low-level structure normally created from parsing a kubeconfig
 	// file.  Since we know all values we can create the client object directly.
 	//
@@ -226,8 +232,8 @@ func getKubeClient(c *container.Cluster) (kubernetes.Interface, error) {
 		AuthInfos: map[string]*api.AuthInfo{
 			// Define the user credentials for access to the API.
 			"user": {
-				ClientKey:         c.MasterAuth.ClientKey,
-				ClientCertificate: c.MasterAuth.ClientCertificate,
+				ClientKeyData:         clientKey,
+				ClientCertificateData: clientCert,
 			},
 		},
 		Contexts: map[string]*api.Context{
