@@ -20,6 +20,7 @@ import (
 	typesv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 
@@ -209,12 +210,6 @@ func getKubeClient(c *container.Cluster) (kubernetes.Interface, error) {
 		return nil, err
 	}
 
-	// The cert and key used to authenticate to the GKE cluster.
-	clientKey, err := base64.StdEncoding.DecodeString(c.MasterAuth.ClientKey)
-	rtx.Must(err, "Failed to decode cluster client key")
-	clientCert, err := base64.StdEncoding.DecodeString(c.MasterAuth.ClientCertificate)
-	rtx.Must(err, "Failed to decode cluster client certificate")
-
 	// This is a low-level structure normally created from parsing a kubeconfig
 	// file.  Since we know all values we can create the client object directly.
 	//
@@ -232,8 +227,12 @@ func getKubeClient(c *container.Cluster) (kubernetes.Interface, error) {
 		AuthInfos: map[string]*api.AuthInfo{
 			// Define the user credentials for access to the API.
 			"user": {
-				ClientKeyData:         clientKey,
-				ClientCertificateData: clientCert,
+				AuthProvider: &api.AuthProviderConfig{
+					Name: "gcp",
+					Config: map[string]string{
+						"scopes": "https://www.googleapis.com/auth/cloud-platform",
+					},
+				},
 			},
 		},
 		Contexts: map[string]*api.Context{
