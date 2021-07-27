@@ -7,6 +7,8 @@ go:
 go_import_path: github.com/m-lab/gcp-service-discovery
 
 before_install:
+- export COVERALLS_SERVICE_JOB_ID=$(TRAVIS_JOB_ID)
+- export COVERALLS_SERVICE_NAME="gcp-service-discovery"
 - go get github.com/mattn/goveralls
 - go get github.com/wadey/gocovmerge
 
