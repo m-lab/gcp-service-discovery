@@ -17,9 +17,10 @@ import (
 	"golang.org/x/oauth2/google"
 	compute "google.golang.org/api/compute/v1"
 	container "google.golang.org/api/container/v1"
+	typesv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	typesv1 "k8s.io/client-go/pkg/api/v1"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 
@@ -137,7 +138,7 @@ func checkCluster(k kubernetes.Interface, zoneName, clusterName string) ([]disco
 	configs := []discovery.StaticConfig{}
 
 	// List all services in the k8s cluster.
-	services, err := k.CoreV1().Services("").List(metav1.ListOptions{})
+	services, err := k.CoreV1().Services("").List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -226,8 +227,12 @@ func getKubeClient(c *container.Cluster) (kubernetes.Interface, error) {
 		AuthInfos: map[string]*api.AuthInfo{
 			// Define the user credentials for access to the API.
 			"user": {
-				Username: c.MasterAuth.Username,
-				Password: c.MasterAuth.Password,
+				AuthProvider: &api.AuthProviderConfig{
+					Name: "gcp",
+					Config: map[string]string{
+						"scopes": "https://www.googleapis.com/auth/cloud-platform",
+					},
+				},
 			},
 		},
 		Contexts: map[string]*api.Context{
