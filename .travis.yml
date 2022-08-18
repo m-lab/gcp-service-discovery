@@ -1,7 +1,7 @@
 language: go
 
 go:
-- '1.16'
+- 1.18
 
 # Place the repo at GOPATH/src/${go_import_path} to support PRs from forks.
 go_import_path: github.com/m-lab/gcp-service-discovery
@@ -9,8 +9,8 @@ go_import_path: github.com/m-lab/gcp-service-discovery
 before_install:
 - export COVERALLS_SERVICE_JOB_ID=$(TRAVIS_JOB_ID)
 - export COVERALLS_SERVICE_NAME="gcp-service-discovery"
-- go get github.com/mattn/goveralls
-- go get github.com/wadey/gocovmerge
+- go install github.com/mattn/goveralls@latest
+- go install github.com/wadey/gocovmerge@latest
 
 script:
 # Run query "unit tests".
