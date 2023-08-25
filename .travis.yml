@@ -12,7 +12,13 @@ before_install:
 - go install github.com/mattn/goveralls@latest
 - go install github.com/wadey/gocovmerge@latest
 
+addons:
+  apt:
+    packages:
+      - docker-ce
+
 script:
+- docker version
 # Run query "unit tests".
 - go test -v -short -covermode=count -coverprofile=merge.cov ./...
 
