@@ -1,7 +1,7 @@
 language: go
 
 go:
-- 1.20
+- 1.20.7
 
 # Place the repo at GOPATH/src/${go_import_path} to support PRs from forks.
 go_import_path: github.com/m-lab/gcp-service-discovery
@@ -11,8 +11,6 @@ before_install:
 - export COVERALLS_SERVICE_NAME="gcp-service-discovery"
 - go install github.com/mattn/goveralls@latest
 - go install github.com/wadey/gocovmerge@latest
-- sudo apt-get update
-- sudo apt-get install docker-ce
 
 script:
 # Run query "unit tests".
