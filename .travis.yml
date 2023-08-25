@@ -12,7 +12,7 @@ before_install:
 - go install github.com/mattn/goveralls@latest
 - go install github.com/wadey/gocovmerge@latest
 - sudo apt-get update
-- sudo apt-get install docker-engine
+- sudo apt-get install docker-ce
 
 script:
 # Run query "unit tests".
