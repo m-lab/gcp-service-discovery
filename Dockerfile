@@ -1,4 +1,4 @@
-FROM golang:1.20.7 as build
+FROM golang:1.20 as build
 COPY . /go/src/github.com/m-lab/gcp-service-discovery
 RUN CGO_ENABLED=0 go install -v github.com/m-lab/gcp-service-discovery/cmd/gcp_service_discovery@latest
 

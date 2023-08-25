@@ -1,7 +1,7 @@
 language: go
 
 go:
-- 1.20.7
+- 1.18
 
 # Place the repo at GOPATH/src/${go_import_path} to support PRs from forks.
 go_import_path: github.com/m-lab/gcp-service-discovery
