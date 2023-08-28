@@ -15,7 +15,6 @@ before_install:
 - go install github.com/wadey/gocovmerge@latest
 
 script:
-- docker version
 # Run query "unit tests".
 - go test -v -short -covermode=count -coverprofile=merge.cov ./...
 
